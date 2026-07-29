@@ -2,15 +2,19 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database.dependencies import get_db
-from app.schemas.repository import RepositoryCreate
+from app.schemas.repository import (
+    RepositoryCreate,
+    RepositoryResponse,
+)
 from app.models.repository import Repository
 from app.repositories.repository_repository import RepositoryRepository
 from app.services.git_service import GitService
+from typing import List
 
 router = APIRouter(prefix="/repositories", tags=["Repositories"])
 
 
-@router.post("/")
+@router.post("/", response_model=RepositoryResponse)
 def create_repository(
     request: RepositoryCreate,
     db: Session = Depends(get_db),
@@ -27,6 +31,6 @@ def create_repository(
     return RepositoryRepository.create(db, repo)
 
 
-@router.get("/")
+@router.get("/", response_model=List[RepositoryResponse])
 def list_repositories(db: Session = Depends(get_db)):
     return RepositoryRepository.get_all(db)
