@@ -15,6 +15,10 @@ class GitService:
 
         destination = BASE_DIR / repo_name
 
+        # Repository already cloned
+        if destination.exists():
+            return repo_name, str(destination)
+
         Repo.clone_from(url, destination)
 
         return repo_name, str(destination)

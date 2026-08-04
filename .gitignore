@@ -5,6 +5,7 @@ backend/**/*.pyc
 backend/repositories/
 # Database
 backend/app/data/
+backend/chroma_db
 *.db
 
 # Environment
@@ -21,3 +22,37 @@ frontend/.next/
 # OS
 .DS_Store
 Thumbs.db
+
+# Python
+.venv/
+venv/
+__pycache__/
+
+# Node
+node_modules/
+
+# VSCode
+.vscode/
+
+# Python cache
+*.pyc
+
+# ChromaDB
+backend/chroma_db/
+
+# Repository clones
+backend/repositories/
+
+# Logs
+*.log
+
+# SQLite
+*.sqlite3
+*.db
+
+# Environment
+.env
+
+# Temporary
+tmp/
+temp/

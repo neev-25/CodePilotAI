@@ -1,9 +1,5 @@
 class RepositoryStatus:
-
-    PENDING = "PENDING"
-
-    CLONING = "CLONING"
-
     READY = "READY"
-
+    INDEXING = "INDEXING"
+    INDEXED = "INDEXED"
     FAILED = "FAILED"
