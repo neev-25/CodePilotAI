@@ -175,7 +175,8 @@ from app.services.production_readiness_service import (
 )
 from app.services.semantic_search_service import SemanticSearchService
 from app.services.diff_review_service import DiffReviewService
-from app.schemas.documentation import DiffReviewRequest, DiffReviewResponse
+from app.services.change_impact_service import ChangeImpactService
+from app.schemas.documentation import DiffReviewRequest, DiffReviewResponse, ChangeImpactRequest, ChangeImpactResponse
 from app.services.analysis_cache_service import AnalysisCacheService
 from app.ai.llm import GeminiServiceError
 from app.services.diagram_fallback_service import DiagramFallbackService
@@ -483,6 +484,23 @@ def diff_review(
         raise RepositoryNotFoundException()
 
     return DiffReviewService.generate(repository, request.diff_text)
+
+
+@router.post("/{repository_id}/change-impact", response_model=ChangeImpactResponse)
+def change_impact(
+    repository_id: int,
+    request: ChangeImpactRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    repository = RepositoryRepository.get_by_id(
+        db, repository_id, current_user.id
+    )
+    if not repository:
+        raise RepositoryNotFoundException()
+
+    return ChangeImpactService.generate(repository, request.file_path, request.proposed_change)
+
 
 
 @router.post(

@@ -380,3 +380,8 @@ export async function generateDiffReview(id: number, diffText: string) {
   const res = await api.post(`/repositories/${id}/diff-review`, { diff_text: diffText });
   return res.data;
 }
+
+export async function generateChangeImpact(id: number, filePath: string, proposedChange: string) {
+  const res = await api.post(`/repositories/${id}/change-impact`, { file_path: filePath, proposed_change: proposedChange });
+  return res.data;
+}
