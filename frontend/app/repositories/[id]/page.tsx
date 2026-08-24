@@ -27,6 +27,7 @@ export default async function RepositoryPage({ params }: Props) {
   }
 
   const actions = [
+    { title: "AI Chat", description: "Query RAG indices about this repository.", href: "chat" },
     { title: "File Explorer", description: "Browse and analyze repository files.", href: "files" },
     { title: "Security Analysis", description: "Find vulnerabilities and security issues.", href: "security" },
     { title: "Repository Review", description: "AI code review of the repository.", href: "review" },
