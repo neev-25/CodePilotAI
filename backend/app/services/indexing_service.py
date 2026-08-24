@@ -3,6 +3,7 @@ from app.ai.embeddings import EmbeddingModel
 from app.ai.reader import FileReader
 from app.ai.scanner import RepositoryScanner
 from app.ai.vector_store import VectorStore
+from app.services.file_hash_service import FileHashService
 
 
 class IndexingError(ValueError):
@@ -16,7 +17,6 @@ class IndexingService:
         repository_id: int,
         repository_path: str,
     ):
-
         files = RepositoryScanner.scan(repository_path)
         if not files:
             raise IndexingError("No supported source files were found in this repository.")
@@ -25,38 +25,69 @@ class IndexingService:
         if not documents:
             raise IndexingError("Supported files were found, but none could be read as text.")
 
-        chunks = CodeChunker.chunk_many(documents)
-        # Empty files have no lines and should not be sent to the embedding or vector APIs.
+        # ── Incremental: skip files whose content hasn't changed ─────────────
+        stored_hashes = FileHashService.load(repository_id)
+        changed_docs, new_hashes = FileHashService.changed_documents(documents, stored_hashes)
+
+        is_full_reindex = not stored_hashes  # first run → full index
+        if not changed_docs and not is_full_reindex:
+            # Nothing changed – return early without touching the vector store
+            return {
+                "files": len(files),
+                "documents": len(documents),
+                "chunks": 0,
+                "vectors": 0,
+                "incremental": True,
+                "skipped": len(documents),
+            }
+        # ─────────────────────────────────────────────────────────────────────
+
+        docs_to_index = changed_docs if not is_full_reindex else documents
+
+        chunks = CodeChunker.chunk_many(docs_to_index)
         chunks = [chunk for chunk in chunks if chunk["content"].strip()]
+        if not chunks and not is_full_reindex:
+            FileHashService.save(repository_id, new_hashes)
+            return {
+                "files": len(files),
+                "documents": len(documents),
+                "chunks": 0,
+                "vectors": 0,
+                "incremental": True,
+            }
+
         if not chunks:
             raise IndexingError("No non-empty source content was available to index.")
 
         embedding_model = EmbeddingModel()
-
-        vectors = embedding_model.encode(
-            [
-                chunk["content"]
-                for chunk in chunks
-            ]
-        )
+        vectors = embedding_model.encode([chunk["content"] for chunk in chunks])
 
         if len(vectors) != len(chunks):
             raise IndexingError("Embedding generation returned an incomplete result.")
 
         db = VectorStore()
-        # Only replace a working index once the new data is ready to store.
-        db.delete_repository(repository_id)
+
+        if is_full_reindex:
+            db.delete_repository(repository_id)
+        else:
+            changed_paths = {doc["path"] for doc in changed_docs}
+            db.delete_file_chunks(repository_id, changed_paths)
 
         try:
             db.add_chunks(repository_id=repository_id, chunks=chunks, embeddings=vectors)
         except Exception as error:
-            # Do not report success when the vector store failed after replacement.
-            db.delete_repository(repository_id)
+            if is_full_reindex:
+                db.delete_repository(repository_id)
             raise IndexingError("The vector index could not be saved. Please try again.") from error
+
+        # Persist updated hash ledger only on success
+        FileHashService.save(repository_id, new_hashes)
 
         return {
             "files": len(files),
             "documents": len(documents),
             "chunks": len(chunks),
             "vectors": len(vectors),
+            "incremental": not is_full_reindex,
+            "skipped": len(documents) - len(docs_to_index),
         }
