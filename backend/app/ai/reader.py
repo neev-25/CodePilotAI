@@ -9,10 +9,10 @@ class FileReader:
         path = Path(file_path)
 
         try:
-            content = path.read_text(
-                encoding="utf-8",
-                errors="ignore",
-            )
+            raw = path.read_bytes()
+            if b"\x00" in raw:
+                return None
+            content = raw.decode("utf-8", errors="replace")
 
             return {
                 "path": str(path),

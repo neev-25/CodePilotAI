@@ -56,16 +56,17 @@ Schema:
 
 {{
   "overall_score": 0,
+  "overall_review": "",
   "strengths": [],
   "issues": [
     {{
-      "severity":"low",
-      "category":"",
-      "file":"",
-      "message":""
+      "severity": "low",
+      "category": "",
+      "file": "",
+      "message": ""
     }}
   ],
-  "recommendations":[]
+  "recommendations": []
 }}
 
 Repository:

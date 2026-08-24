@@ -24,27 +24,14 @@ from app.services.dependency_analysis_service import (
 class RepositoryHealthService:
 
     @staticmethod
-    def analyze(repository):
+    def analyze(repository, analyses=None):
 
-        stats = RepositoryStatsService.get_stats(
-            repository
-        )
-
-        review = RepositoryReviewService.review(
-            repository
-        )
-
-        security = SecurityAnalysisService.analyze(
-            repository
-        )
-
-        complexity = ComplexityAnalysisService.analyze(
-            repository
-        )
-
-        dependency = DependencyAnalysisService.analyze(
-            repository
-        )
+        analyses = analyses or {}
+        stats = analyses.get("stats") or RepositoryStatsService.get_stats(repository)
+        review = analyses.get("review") or RepositoryReviewService.review(repository)
+        security = analyses.get("security") or SecurityAnalysisService.analyze(repository)
+        complexity = analyses.get("complexity") or ComplexityAnalysisService.analyze(repository)
+        dependency = analyses.get("dependency") or DependencyAnalysisService.analyze(repository)
 
         prompt = f"""
 You are a principal software architect.

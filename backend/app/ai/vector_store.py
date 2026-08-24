@@ -1,13 +1,13 @@
 import chromadb
+from app.core.config import settings
 
 
 class VectorStore:
 
     def __init__(self):
 
-        self.client = chromadb.PersistentClient(
-            path="./chroma_db"
-        )
+        settings.VECTOR_STORE_PATH.mkdir(parents=True, exist_ok=True)
+        self.client = chromadb.PersistentClient(path=str(settings.VECTOR_STORE_PATH.resolve()))
 
         self.collection = self.client.get_or_create_collection(
             name="codepilot"

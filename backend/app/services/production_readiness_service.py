@@ -8,11 +8,9 @@ from app.services.repository_health_service import (
 class ProductionReadinessService:
 
     @staticmethod
-    def analyze(repository):
+    def analyze(repository, health=None):
 
-        health = RepositoryHealthService.analyze(
-            repository
-        )
+        health = health or RepositoryHealthService.analyze(repository)
 
         prompt = f"""
 You are a Principal Software Architect.

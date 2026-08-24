@@ -1,8 +1,11 @@
+import json
 from typing import List
 from app.schemas.response import AskResponse
-from fastapi import APIRouter,Depends,HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.services.indexing_service import IndexingService
+from app.api.auth import get_current_user
+from app.models.user import User
+from app.services.indexing_service import IndexingError, IndexingService
 from app.core.constants import RepositoryStatus
 from app.core.exceptions import (
     RepositoryAlreadyExistsException,
@@ -43,6 +46,7 @@ from app.schemas.documentation import DocumentationResponse
 router = APIRouter(
     prefix="/repositories",
     tags=["Repositories"],
+    redirect_slashes=False,
 )
 from app.schemas.file_explain import (
     ExplainFileRequest,
@@ -148,6 +152,7 @@ from app.schemas.documentation import (
     DocumentationRequest,
     DocumentationResponse,
 )
+from app.services.documentation_service import DocumentationService
 from app.schemas.complexity_analysis import (
     ComplexityAnalysisResponse,
 )
@@ -168,15 +173,49 @@ from app.schemas.production_readiness import (
 from app.services.production_readiness_service import (
     ProductionReadinessService,
 )
-@router.post("/", response_model=RepositoryResponse)
+from app.services.analysis_cache_service import AnalysisCacheService
+from app.ai.llm import GeminiServiceError
+from app.services.diagram_fallback_service import DiagramFallbackService
+from app.models.indexing_job import IndexingJob
+from app.services.indexing_job_service import IndexingJobService
+
+
+def cached_analysis(db, repository, artifact_type, generate, inputs=None, fallback=None):
+    try:
+        return AnalysisCacheService.get_or_generate(
+            db, repository.id, artifact_type, generate, inputs
+        )
+    except GeminiServiceError as error:
+        logger.warning("Gemini failed for repository %s (%s): %s", repository.id, artifact_type, error)
+        if fallback:
+            # Diagram routes remain useful during provider quota outages.
+            return AnalysisCacheService.get_or_generate(
+                db, repository.id, artifact_type, fallback, inputs
+            )
+        raise HTTPException(status_code=502, detail="The AI could not complete this request. Please try again.") from error
+
+
+def build_health_analysis(db, repository):
+    """Compose health reports from persisted sub-analyses instead of re-calling Gemini."""
+    analyses = {
+        "stats": RepositoryStatsService.get_stats(repository),
+        "review": cached_analysis(db, repository, "review", lambda: RepositoryReviewService.review(repository)),
+        "security": cached_analysis(db, repository, "security_analysis", lambda: SecurityAnalysisService.analyze(repository)),
+        "complexity": cached_analysis(db, repository, "complexity_analysis", lambda: ComplexityAnalysisService.analyze(repository)),
+        "dependency": cached_analysis(db, repository, "dependency_analysis", lambda: DependencyAnalysisService.analyze(repository)),
+    }
+    return RepositoryHealthService.analyze(repository, analyses)
+@router.post("", response_model=RepositoryResponse)
 def create_repository(
     request: RepositoryCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     existing = RepositoryRepository.get_by_url(
         db,
         request.github_url,
+        current_user.id,
     )
 
     if existing:
@@ -184,15 +223,17 @@ def create_repository(
 
     logger.info(f"Cloning repository: {request.github_url}")
 
-    repo_name, local_path = GitService.clone(
-        request.github_url,
-    )
+    try:
+        repo_name, local_path = GitService.clone(request.github_url)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
     repo = Repository(
         name=repo_name,
         github_url=request.github_url,
         local_path=local_path,
         status=RepositoryStatus.READY,
+        user_id=current_user.id,
     )
 
     logger.info(f"Repository cloned: {repo_name}")
@@ -203,14 +244,15 @@ def create_repository(
     )
 
 
-@router.get("/", response_model=List[RepositoryResponse])
+@router.get("", response_model=List[RepositoryResponse])
 def list_repositories(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     logger.info("Fetching all repositories")
 
-    return RepositoryRepository.get_all(db)
+    return RepositoryRepository.get_all(db, current_user.id)
 
 
 @router.get(
@@ -220,11 +262,13 @@ def list_repositories(
 def get_repository(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -237,11 +281,13 @@ def get_repository(
 def delete_repository(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -263,11 +309,14 @@ def delete_repository(
 @router.post("/{repository_id}/index")
 def index_repository(
     repository_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -277,44 +326,46 @@ def index_repository(
     db.commit()
     db.refresh(repository)
 
-    try:
-        result = IndexingService.index(
-            repository_id=repository.id,
-            repository_path=repository.local_path,
-        )
+    job = IndexingJob(repository_id=repository.id, status="QUEUED", message="Waiting to begin indexing.")
+    db.add(job); db.commit(); db.refresh(job)
+    background_tasks.add_task(IndexingJobService.run, job.id, repository.id)
+    return {"job_id": job.id, "status": job.status, "message": job.message}
 
-        repository.status = RepositoryStatus.INDEXED
-        db.commit()
-        db.refresh(repository)
 
-        return {
-            "message": "Repository indexed successfully.",
-            "stats": result,
-        }
-
-    except Exception:
-        repository.status = RepositoryStatus.FAILED
-        db.commit()
-        db.refresh(repository)
-        raise 
+@router.get("/{repository_id}/index-jobs/latest")
+def latest_index_job(
+    repository_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Verify the repo belongs to this user first
+    repo = RepositoryRepository.get_by_id(db, repository_id, current_user.id)
+    if not repo:
+        raise RepositoryNotFoundException()
+    job = db.query(IndexingJob).filter(IndexingJob.repository_id == repository_id).order_by(IndexingJob.id.desc()).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="No indexing job found.")
+    return {"id": job.id, "status": job.status, "message": job.message, "result": json.loads(job.result_json) if job.result_json else None}
 
 @router.post("/{repository_id}/ask", response_model=AskResponse)
 def ask_repository(
     repository_id: int,
     request: AskRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
         raise RepositoryNotFoundException()
 
     if repository.status != RepositoryStatus.INDEXED:
-        raise Exception("Repository has not been indexed yet.")
+        raise HTTPException(status_code=400, detail="Repository has not been indexed yet.")
 
     return RAGService.ask(
         request.question,
@@ -325,11 +376,13 @@ def ask_repository(
 def repository_stats(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -339,18 +392,19 @@ def repository_stats(
         repository,
     )
     
-@router.post(
-    "/{repository_id}/summary",
+@router.post("/{repository_id}/summary",
     response_model=RepositorySummaryResponse,
 )
 def repository_summary(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -362,9 +416,7 @@ def repository_summary(
             detail="Repository has not been indexed.",
         )
 
-    return RepositorySummaryService.generate_summary(
-        repository
-    )
+    return cached_analysis(db, repository, "summary", lambda: RepositorySummaryService.generate_summary(repository))
     
 @router.get(
     "/{repository_id}/files",
@@ -373,11 +425,13 @@ def repository_summary(
 def repository_files(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -395,11 +449,13 @@ def explain_file(
     repository_id: int,
     request: ExplainFileRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -411,10 +467,7 @@ def explain_file(
             detail="Repository has not been indexed.",
         )
 
-    return ExplainFileService.explain(
-        repository,
-        request.path,
-    )
+    return cached_analysis(db, repository, "file_explanation", lambda: ExplainFileService.explain(repository, request.path), {"path": request.path})
     
 @router.post(
     "/{repository_id}/functions/explain",
@@ -424,11 +477,13 @@ def explain_function(
     repository_id: int,
     request: ExplainFunctionRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -440,11 +495,7 @@ def explain_function(
             detail="Repository has not been indexed.",
         )
 
-    return FunctionExplainService.explain(
-        repository,
-        request.path,
-        request.function,
-    )
+    return cached_analysis(db, repository, "function_explanation", lambda: FunctionExplainService.explain(repository, request.path, request.function), {"path": request.path, "function": request.function})
     
 @router.get(
     "/{repository_id}/dependencies",
@@ -453,11 +504,13 @@ def explain_function(
 def dependency_graph(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -469,9 +522,7 @@ def dependency_graph(
             detail="Repository has not been indexed.",
         )
 
-    return DependencyGraphService.build(
-        repository
-    )
+    return cached_analysis(db, repository, "dependency_graph", lambda: DependencyGraphService.build(repository))
     
 @router.post(
     "/{repository_id}/review",
@@ -480,11 +531,13 @@ def dependency_graph(
 def review_repository(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -496,9 +549,7 @@ def review_repository(
             detail="Repository has not been indexed.",
         )
 
-    return RepositoryReviewService.review(
-        repository
-    )
+    return cached_analysis(db, repository, "review", lambda: RepositoryReviewService.review(repository))
     
 @router.post(
     "/{repository_id}/security-analysis",
@@ -507,11 +558,13 @@ def review_repository(
 def security_analysis(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -523,9 +576,7 @@ def security_analysis(
             detail="Repository has not been indexed.",
         )
 
-    return SecurityAnalysisService.analyze(
-        repository
-    )
+    return cached_analysis(db, repository, "security_analysis", lambda: SecurityAnalysisService.analyze(repository))
     
 @router.post(
     "/{repository_id}/files/document",
@@ -535,11 +586,13 @@ def generate_documentation(
     repository_id: int,
     request: DocumentationRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -551,10 +604,7 @@ def generate_documentation(
             detail="Repository has not been indexed.",
         )
 
-    return DocumentationService.generate(
-        repository,
-        request.file_path,
-    )
+    return cached_analysis(db, repository, "documentation", lambda: DocumentationService.generate(repository, request.file_path), {"path": request.file_path})
     
 @router.post(
     "/{repository_id}/readme",
@@ -563,11 +613,13 @@ def generate_documentation(
 def generate_readme(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -579,7 +631,7 @@ def generate_readme(
             detail="Repository has not been indexed.",
         )
 
-    return ReadmeService.generate(repository)
+    return cached_analysis(db, repository, "readme", lambda: ReadmeService.generate(repository))
 
 @router.post(
     "/{repository_id}/refactor",
@@ -588,11 +640,13 @@ def generate_readme(
 def generate_refactor(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -604,7 +658,7 @@ def generate_refactor(
             detail="Repository has not been indexed.",
         )
 
-    return RefactorService.generate(repository)
+    return cached_analysis(db, repository, "refactor", lambda: RefactorService.generate(repository))
 
 @router.post(
     "/{repository_id}/files/tests",
@@ -614,11 +668,13 @@ def generate_tests(
     repository_id: int,
     request: TestGenerationRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -630,10 +686,7 @@ def generate_tests(
             detail="Repository has not been indexed.",
         )
 
-    return TestGeneratorService.generate(
-        repository,
-        request.file_path,
-    )
+    return cached_analysis(db, repository, "tests", lambda: TestGeneratorService.generate(repository, request.file_path), {"path": request.file_path})
     
 @router.post(
     "/{repository_id}/pr-description",
@@ -643,11 +696,13 @@ def generate_pr_description(
     repository_id: int,
     request: PRDescriptionRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -659,11 +714,7 @@ def generate_pr_description(
             detail="Repository has not been indexed.",
         )
 
-    return PRDescriptionService.generate(
-        repository,
-        request.title,
-        request.summary,
-    )
+    return cached_analysis(db, repository, "pr_description", lambda: PRDescriptionService.generate(repository, request.title, request.summary), {"title": request.title, "summary": request.summary})
     
 @router.post(
     "/{repository_id}/commit-message",
@@ -673,11 +724,13 @@ def generate_commit_message(
     repository_id: int,
     request: CommitMessageRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -689,10 +742,7 @@ def generate_commit_message(
             detail="Repository has not been indexed.",
         )
 
-    return CommitMessageService.generate(
-        repository,
-        request.summary,
-    )
+    return cached_analysis(db, repository, "commit_message", lambda: CommitMessageService.generate(repository, request.summary), {"summary": request.summary})
     
 @router.post(
     "/{repository_id}/changelog",
@@ -702,11 +752,13 @@ def generate_changelog(
     repository_id: int,
     request: ChangelogRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -718,11 +770,7 @@ def generate_changelog(
             detail="Repository has not been indexed.",
         )
 
-    return ChangelogService.generate(
-        repository,
-        request.version,
-        request.summary,
-    )
+    return cached_analysis(db, repository, "changelog", lambda: ChangelogService.generate(repository, request.version, request.summary), {"version": request.version, "summary": request.summary})
     
 @router.post(
     "/{repository_id}/architecture",
@@ -731,11 +779,13 @@ def generate_changelog(
 def generate_architecture(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -747,9 +797,7 @@ def generate_architecture(
             detail="Repository has not been indexed.",
         )
 
-    return ArchitectureService.generate(
-        repository,
-    )
+    return cached_analysis(db, repository, "architecture", lambda: ArchitectureService.generate(repository))
     
 @router.post(
     "/{repository_id}/sequence-diagram",
@@ -758,11 +806,13 @@ def generate_architecture(
 def generate_sequence_diagram(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -774,9 +824,7 @@ def generate_sequence_diagram(
             detail="Repository has not been indexed.",
         )
 
-    return SequenceDiagramService.generate(
-        repository,
-    )
+    return cached_analysis(db, repository, "sequence_diagram", lambda: SequenceDiagramService.generate(repository), fallback=lambda: DiagramFallbackService.sequence(repository))
     
 @router.post(
     "/{repository_id}/class-diagram",
@@ -785,11 +833,13 @@ def generate_sequence_diagram(
 def generate_class_diagram(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -801,9 +851,7 @@ def generate_class_diagram(
             detail="Repository has not been indexed.",
         )
 
-    return ClassDiagramService.generate(
-        repository,
-    )
+    return cached_analysis(db, repository, "class_diagram", lambda: ClassDiagramService.generate(repository), fallback=lambda: DiagramFallbackService.class_diagram(repository))
     
 @router.post(
     "/{repository_id}/flowchart",
@@ -812,11 +860,13 @@ def generate_class_diagram(
 def generate_flowchart(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -828,9 +878,7 @@ def generate_flowchart(
             detail="Repository has not been indexed.",
         )
 
-    return FlowchartService.generate(
-        repository,
-    )
+    return cached_analysis(db, repository, "flowchart", lambda: FlowchartService.generate(repository), fallback=lambda: DiagramFallbackService.flowchart(repository))
     
 @router.post(
     "/{repository_id}/dependency-analysis",
@@ -839,11 +887,13 @@ def generate_flowchart(
 def dependency_analysis(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -855,36 +905,7 @@ def dependency_analysis(
             detail="Repository has not been indexed.",
         )
 
-    return DependencyAnalysisService.analyze(
-        repository
-    )
-    
-@router.post(
-    "/{repository_id}/dependency-analysis",
-    response_model=DependencyAnalysisResponse,
-)
-def dependency_analysis(
-    repository_id: int,
-    db: Session = Depends(get_db),
-):
-
-    repository = RepositoryRepository.get_by_id(
-        db,
-        repository_id,
-    )
-
-    if not repository:
-        raise RepositoryNotFoundException()
-
-    if repository.status != RepositoryStatus.INDEXED:
-        raise HTTPException(
-            status_code=400,
-            detail="Repository has not been indexed.",
-        )
-
-    return DependencyAnalysisService.analyze(
-        repository
-    )
+    return cached_analysis(db, repository, "dependency_analysis", lambda: DependencyAnalysisService.analyze(repository))
     
 @router.post(
     "/{repository_id}/complexity-analysis",
@@ -893,11 +914,13 @@ def dependency_analysis(
 def complexity_analysis(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -909,9 +932,7 @@ def complexity_analysis(
             detail="Repository has not been indexed.",
         )
 
-    return ComplexityAnalysisService.analyze(
-        repository
-    )
+    return cached_analysis(db, repository, "complexity_analysis", lambda: ComplexityAnalysisService.analyze(repository))
     
 @router.post(
     "/{repository_id}/health-score",
@@ -920,11 +941,13 @@ def complexity_analysis(
 def repository_health(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -936,9 +959,7 @@ def repository_health(
             detail="Repository has not been indexed.",
         )
 
-    return RepositoryHealthService.analyze(
-        repository
-    )
+    return cached_analysis(db, repository, "health_score", lambda: build_health_analysis(db, repository))
 @router.post(
     "/{repository_id}/production-readiness",
     response_model=ProductionReadinessResponse,
@@ -946,11 +967,13 @@ def repository_health(
 def production_readiness(
     repository_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
 
     repository = RepositoryRepository.get_by_id(
         db,
         repository_id,
+        current_user.id,
     )
 
     if not repository:
@@ -962,6 +985,6 @@ def production_readiness(
             detail="Repository has not been indexed.",
         )
 
-    return ProductionReadinessService.analyze(
-        repository
-    )
+    health = cached_analysis(db, repository, "health_score", lambda: build_health_analysis(db, repository))
+    return cached_analysis(db, repository, "production_readiness", lambda: ProductionReadinessService.analyze(repository, health))
+
