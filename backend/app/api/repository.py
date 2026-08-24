@@ -173,6 +173,7 @@ from app.schemas.production_readiness import (
 from app.services.production_readiness_service import (
     ProductionReadinessService,
 )
+from app.services.semantic_search_service import SemanticSearchService
 from app.services.analysis_cache_service import AnalysisCacheService
 from app.ai.llm import GeminiServiceError
 from app.services.diagram_fallback_service import DiagramFallbackService
@@ -441,6 +442,31 @@ def repository_files(
         repository
     )
     
+@router.post("/{repository_id}/search")
+def semantic_search(
+    repository_id: int,
+    request: AskRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+
+    repository = RepositoryRepository.get_by_id(
+        db,
+        repository_id,
+        current_user.id,
+    )
+
+    if not repository:
+        raise RepositoryNotFoundException()
+
+    if repository.status != RepositoryStatus.INDEXED:
+        raise HTTPException(
+            status_code=400,
+            detail="Repository has not been indexed.",
+        )
+
+    return SemanticSearchService.search(repository_id, request.question)
+
 @router.post(
     "/{repository_id}/files/explain",
     response_model=ExplainFileResponse,

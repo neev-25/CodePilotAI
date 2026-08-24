@@ -370,3 +370,8 @@ export async function askRepository(
   const res = await api.post(`/repositories/${id}/ask`, { question });
   return res.data;
 }
+
+export async function semanticSearch(id: number, query: string) {
+  const res = await api.post(`/repositories/${id}/search`, { question: query });
+  return res.data;
+}
