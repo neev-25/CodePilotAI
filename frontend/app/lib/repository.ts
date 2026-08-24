@@ -385,3 +385,8 @@ export async function generateChangeImpact(id: number, filePath: string, propose
   const res = await api.post(`/repositories/${id}/change-impact`, { file_path: filePath, proposed_change: proposedChange });
   return res.data;
 }
+
+export async function measureArchitectureDrift(id: number, constraint: string) {
+  const res = await api.post(`/repositories/${id}/architecture-drift`, { constraint: constraint });
+  return res.data;
+}

@@ -20,6 +20,12 @@ class ChangeImpactRequest(BaseModel):
 class ChangeImpactResponse(BaseModel):
     impact: str
 
+class ArchitectureDriftRequest(BaseModel):
+    constraint: str
+
+class ArchitectureDriftResponse(BaseModel):
+    drift_report: str
+
 
 class DocumentationResponse(BaseModel):
     documentation: str

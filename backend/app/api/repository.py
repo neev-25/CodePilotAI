@@ -176,7 +176,8 @@ from app.services.production_readiness_service import (
 from app.services.semantic_search_service import SemanticSearchService
 from app.services.diff_review_service import DiffReviewService
 from app.services.change_impact_service import ChangeImpactService
-from app.schemas.documentation import DiffReviewRequest, DiffReviewResponse, ChangeImpactRequest, ChangeImpactResponse
+from app.services.architecture_drift_service import ArchitectureDriftService
+from app.schemas.documentation import DiffReviewRequest, DiffReviewResponse, ChangeImpactRequest, ChangeImpactResponse, ArchitectureDriftRequest, ArchitectureDriftResponse
 from app.services.analysis_cache_service import AnalysisCacheService
 from app.ai.llm import GeminiServiceError
 from app.services.diagram_fallback_service import DiagramFallbackService
@@ -500,6 +501,22 @@ def change_impact(
         raise RepositoryNotFoundException()
 
     return ChangeImpactService.generate(repository, request.file_path, request.proposed_change)
+
+@router.post("/{repository_id}/architecture-drift", response_model=ArchitectureDriftResponse)
+def architecture_drift(
+    repository_id: int,
+    request: ArchitectureDriftRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    repository = RepositoryRepository.get_by_id(
+        db, repository_id, current_user.id
+    )
+    if not repository:
+        raise RepositoryNotFoundException()
+
+    return ArchitectureDriftService.generate(repository, request.constraint)
+
 
 
 
