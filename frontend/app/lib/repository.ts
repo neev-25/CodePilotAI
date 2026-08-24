@@ -375,3 +375,8 @@ export async function semanticSearch(id: number, query: string) {
   const res = await api.post(`/repositories/${id}/search`, { question: query });
   return res.data;
 }
+
+export async function generateDiffReview(id: number, diffText: string) {
+  const res = await api.post(`/repositories/${id}/diff-review`, { diff_text: diffText });
+  return res.data;
+}

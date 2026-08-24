@@ -43,6 +43,7 @@ export default async function RepositoryPage({ params }: Props) {
     { title: "Production Readiness", description: "Production readiness report.", href: "production" },
     { title: "Refactoring Advisor", description: "Suggest improvements.", href: "refactor" },
     { title: "Test Generator", description: "Generate unit tests.", href: "tests" },
+    { title: "AI Git Diff Review", description: "Evaluate local patches for bugs/optimizations.", href: "diff-review" },
     { title: "PR Description", description: "Generate Pull Request description.", href: "pr" },
     { title: "Commit Message", description: "Generate Conventional Commit.", href: "commit" },
     { title: "Changelog", description: "Generate changelog entry.", href: "changelog" },
