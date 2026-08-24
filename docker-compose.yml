@@ -1,0 +1,103 @@
+version: "3.9"
+
+networks:
+  codepilot:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  chroma_data:
+  repo_data:
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: codepilot
+      POSTGRES_USER: codepilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-codepilot_dev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - codepilot
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U codepilot" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - codepilot
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── FastAPI Backend ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://codepilot:${POSTGRES_PASSWORD:-codepilot_dev}@db:5432/codepilot
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      ENVIRONMENT: production
+    volumes:
+      - chroma_data:/app/chroma_db
+      - repo_data:/app/repositories
+    ports:
+      - "8000:8000"
+    networks:
+      - codepilot
+
+  # ── Celery Worker ────────────────────────────────────────────────────────────
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://codepilot:${POSTGRES_PASSWORD:-codepilot_dev}@db:5432/codepilot
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+    volumes:
+      - chroma_data:/app/chroma_db
+      - repo_data:/app/repositories
+    networks:
+      - codepilot
+
+  # ── Next.js Frontend ─────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://backend:8000
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    networks:
+      - codepilot
