@@ -21,11 +21,8 @@ class VectorStore:
     ):
 
         ids = []
-
         documents = []
-
         metadatas = []
-
         embedding_list = []
 
         for index, chunk in enumerate(chunks):
@@ -102,3 +99,22 @@ class VectorStore:
                 "repository_id": repository_id
             }
         )
+
+    def delete_file_chunks(
+        self,
+        repository_id: int,
+        file_paths: set,
+    ):
+        """Delete Chroma chunks for a specific set of file paths within a repository."""
+        for path in file_paths:
+            try:
+                self.collection.delete(
+                    where={
+                        "$and": [
+                            {"repository_id": {"$eq": repository_id}},
+                            {"path": {"$eq": path}},
+                        ]
+                    }
+                )
+            except Exception:
+                pass  # Safe to ignore — chunk may not yet exist
