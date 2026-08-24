@@ -3,16 +3,25 @@
 import { useState, useEffect } from "react";
 import { getTasks, createTask } from "@/app/lib/repository";
 import { Loader2, Plus, KanbanSquare, CheckCircle2, Circle } from "lucide-react";
+import { useCallback } from "react";
+
+interface TaskItem {
+    id: number;
+    title: string;
+    description: string | null;
+    status: string;
+    created_at: string;
+}
 
 export default function TasksForm({ repoId }: { repoId: number }) {
-    const [tasks, setTasks] = useState<any[]>([]);
+    const [tasks, setTasks] = useState<TaskItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
 
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
 
-    const loadTasks = async () => {
+    const loadTasks = useCallback(async () => {
         try {
             setLoading(true);
             const data = await getTasks(repoId);
@@ -22,11 +31,11 @@ export default function TasksForm({ repoId }: { repoId: number }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, [repoId]);
 
     useEffect(() => {
         loadTasks();
-    }, [repoId]);
+    }, [loadTasks]);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
