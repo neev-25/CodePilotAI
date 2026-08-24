@@ -181,6 +181,7 @@ from app.services.architecture_drift_service import ArchitectureDriftService
 from app.schemas.documentation import DiffReviewRequest, DiffReviewResponse, ChangeImpactRequest, ChangeImpactResponse, ArchitectureDriftRequest, ArchitectureDriftResponse
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskResponse
+from app.services.ai_usage_service import AIUsageService
 from app.services.analysis_cache_service import AnalysisCacheService
 from app.ai.llm import GeminiServiceError
 from app.services.diagram_fallback_service import DiagramFallbackService
@@ -486,7 +487,15 @@ def diff_review(
     if not repository:
         raise RepositoryNotFoundException()
 
-    return DiffReviewService.generate(repository, request.diff_text)
+    def _generate():
+        AIUsageService.log(db, repository_id, "diff_review", request.diff_text)
+        return DiffReviewService.generate(repository, request.diff_text)
+
+    return cached_analysis(
+        db, repository, "diff_review",
+        _generate,
+        {"diff_hash": request.diff_text[:64]},
+    )
 
 
 @router.post("/{repository_id}/change-impact", response_model=ChangeImpactResponse)
@@ -502,7 +511,15 @@ def change_impact(
     if not repository:
         raise RepositoryNotFoundException()
 
-    return ChangeImpactService.generate(repository, request.file_path, request.proposed_change)
+    def _generate():
+        AIUsageService.log(db, repository_id, "change_impact", request.file_path + request.proposed_change)
+        return ChangeImpactService.generate(repository, request.file_path, request.proposed_change)
+
+    return cached_analysis(
+        db, repository, "change_impact",
+        _generate,
+        {"file": request.file_path, "change_hash": request.proposed_change[:64]},
+    )
 
 @router.post("/{repository_id}/architecture-drift", response_model=ArchitectureDriftResponse)
 def architecture_drift(
@@ -517,7 +534,15 @@ def architecture_drift(
     if not repository:
         raise RepositoryNotFoundException()
 
-    return ArchitectureDriftService.generate(repository, request.constraint)
+    def _generate():
+        AIUsageService.log(db, repository_id, "architecture_drift", request.constraint)
+        return ArchitectureDriftService.generate(repository, request.constraint)
+
+    return cached_analysis(
+        db, repository, "architecture_drift",
+        _generate,
+        {"constraint": request.constraint},
+    )
 
 
 @router.post("/{repository_id}/tasks", response_model=TaskResponse)
