@@ -71,9 +71,13 @@ export default async function RepositoryPage({ params }: Props) {
         <h2 className="text-2xl font-bold">Repository Statistics</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
           <StatCard label="Total Files" value={stats.files} />
-          <StatCard label="Documents" value={stats.documents} />
-          <StatCard label="Chunks" value={stats.chunks} />
-          <StatCard label="Vectors" value={stats.vectors} />
+          <StatCard label="Lines of Code" value={stats.loc ?? 0} />
+          <StatCard label="Commits" value={stats.commits ?? 0} />
+          <StatCard label="Branches" value={stats.branches ?? 0} />
+          <StatCard label="Contributors" value={stats.contributors ?? 0} />
+          <StatCard label="Indexed Documents" value={stats.documents ?? 0} />
+          <StatCard label="Chunks" value={stats.chunks ?? 0} />
+          <StatCard label="Vectors" value={stats.vectors ?? 0} />
         </div>
       </div>
 

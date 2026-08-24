@@ -33,3 +33,33 @@ class GitService:
             raise ValueError("Unable to clone the repository. Check the URL and repository access.") from error
 
         return repo_name, str(destination)
+        
+    @staticmethod
+    def get_stats(local_path: str):
+        try:
+            repo = Repo(local_path)
+            head_commit = getattr(repo.head.commit, 'hexsha', None) if repo.head.is_valid() else None
+            
+            # Simple iteration for stats (can be optimized later for huge repos)
+            commits = 0
+            contributors = set()
+            try:
+                for c in repo.iter_commits():
+                    commits += 1
+                    contributors.add(c.author.email)
+            except Exception:
+                pass
+                
+            return {
+                "current_commit": head_commit,
+                "commits": commits,
+                "branches": len(repo.branches),
+                "contributors": len(contributors)
+            }
+        except Exception:
+            return {
+                "current_commit": None,
+                "commits": 0,
+                "branches": 0,
+                "contributors": 0
+            }

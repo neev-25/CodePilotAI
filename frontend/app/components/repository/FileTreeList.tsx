@@ -5,15 +5,16 @@ interface Props {
   repoId: string;
   nodes: FileTreeNode[];
   prefix?: string;
+  selectedFile?: string | null;
 }
 
 function buildPath(prefix: string, name: string) {
   return prefix ? `${prefix}/${name}` : name;
 }
 
-export default function FileTreeList({ repoId, nodes, prefix = "" }: Props) {
+export default function FileTreeList({ repoId, nodes, prefix = "", selectedFile = null }: Props) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       {nodes.map((node) => {
         const path = buildPath(prefix, node.name);
 
@@ -30,6 +31,7 @@ export default function FileTreeList({ repoId, nodes, prefix = "" }: Props) {
                     repoId={repoId}
                     nodes={node.children}
                     prefix={path}
+                    selectedFile={selectedFile}
                   />
                 </div>
               )}
@@ -37,45 +39,20 @@ export default function FileTreeList({ repoId, nodes, prefix = "" }: Props) {
           );
         }
 
+        const isSelected = selectedFile === path;
+
         return (
-          <div
+          <Link
             key={path}
-            className="border rounded-xl p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-white"
+            href={`/repositories/${repoId}/files?file=${encodeURIComponent(path)}`}
+            className={`block rounded-lg px-3 py-2 text-sm transition-colors ${isSelected ? "bg-indigo-50 text-indigo-700 font-medium" : "text-gray-600 hover:bg-gray-100"
+              }`}
           >
-            <div className="min-w-0">
-              <h2 className="font-semibold flex items-center gap-2">
-                <span className="text-gray-400">📄</span>
-                {node.name}
-              </h2>
-              <p className="text-gray-500 text-sm truncate">{path}</p>
+            <div className="flex items-center gap-2 truncate">
+              <span className={isSelected ? "text-indigo-500" : "text-gray-400"}>📄</span>
+              <span className="truncate">{node.name}</span>
             </div>
-            <div className="flex flex-wrap gap-2 shrink-0">
-              <Link
-                href={`/repositories/${repoId}/explain?file=${encodeURIComponent(path)}`}
-                className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-blue-700"
-              >
-                Explain
-              </Link>
-              <Link
-                href={`/repositories/${repoId}/documentation?file=${encodeURIComponent(path)}`}
-                className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-green-700"
-              >
-                Documentation
-              </Link>
-              <Link
-                href={`/repositories/${repoId}/function-explain?file=${encodeURIComponent(path)}`}
-                className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-purple-700"
-              >
-                Function
-              </Link>
-              <Link
-                href={`/repositories/${repoId}/tests?file=${encodeURIComponent(path)}`}
-                className="bg-orange-600 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-orange-700"
-              >
-                Tests
-              </Link>
-            </div>
-          </div>
+          </Link>
         );
       })}
     </div>

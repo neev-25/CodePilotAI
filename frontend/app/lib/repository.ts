@@ -19,6 +19,11 @@ export interface RepositoryStats {
   chunks: number;
   vectors: number;
   languages: Record<string, number>;
+  loc?: number;
+  commits?: number;
+  branches?: number;
+  contributors?: number;
+  current_commit?: string | null;
 }
 
 export interface FileTreeNode {
@@ -193,6 +198,13 @@ export async function getRepositorySummary(id: number) {
 
 export async function getRepositoryTree(id: number): Promise<FileTreeResponse> {
   const res = await api.get(`/repositories/${id}/files`);
+  return res.data;
+}
+
+export async function getFileContent(id: number, filePath: string) {
+  const res = await api.get(`/repositories/${id}/files/content`, {
+    params: { file_path: filePath }
+  });
   return res.data;
 }
 

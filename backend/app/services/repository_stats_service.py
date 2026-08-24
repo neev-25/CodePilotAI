@@ -4,6 +4,7 @@ from app.ai.chunker import CodeChunker
 from app.ai.reader import FileReader
 from app.ai.scanner import RepositoryScanner
 from app.ai.vector_store import VectorStore
+from app.services.git_service import GitService
 from pathlib import Path
 
 EXTENSION_MAP = {
@@ -59,6 +60,13 @@ class RepositoryStatsService:
             )
         
             language_counter[language] += 1
+            
+        loc = 0
+        for doc in documents:
+            if doc and "content" in doc:
+                loc += doc["content"].count("\n") + 1
+                
+        git_stats = GitService.get_stats(repository.local_path)
 
         return {
             "repository": repository.name,
@@ -68,4 +76,6 @@ class RepositoryStatsService:
             "chunks": len(chunks),
             "vectors": vector_count,
             "languages": dict(language_counter),
+            "loc": loc,
+            **git_stats
         }
