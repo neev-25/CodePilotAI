@@ -178,6 +178,8 @@ from app.services.diff_review_service import DiffReviewService
 from app.services.change_impact_service import ChangeImpactService
 from app.services.architecture_drift_service import ArchitectureDriftService
 from app.schemas.documentation import DiffReviewRequest, DiffReviewResponse, ChangeImpactRequest, ChangeImpactResponse, ArchitectureDriftRequest, ArchitectureDriftResponse
+from app.models.task import Task
+from app.schemas.task import TaskCreate, TaskResponse
 from app.services.analysis_cache_service import AnalysisCacheService
 from app.ai.llm import GeminiServiceError
 from app.services.diagram_fallback_service import DiagramFallbackService
@@ -516,6 +518,42 @@ def architecture_drift(
         raise RepositoryNotFoundException()
 
     return ArchitectureDriftService.generate(repository, request.constraint)
+
+
+@router.post("/{repository_id}/tasks", response_model=TaskResponse)
+def create_task(
+    repository_id: int,
+    request: TaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    repository = RepositoryRepository.get_by_id(db, repository_id, current_user.id)
+    if not repository:
+        raise RepositoryNotFoundException()
+
+    new_task = Task(
+        repository_id=repository.id,
+        title=request.title,
+        description=request.description
+    )
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+    return new_task
+
+@router.get("/{repository_id}/tasks", response_model=list[TaskResponse])
+def get_tasks(
+    repository_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    repository = RepositoryRepository.get_by_id(db, repository_id, current_user.id)
+    if not repository:
+        raise RepositoryNotFoundException()
+
+    tasks = db.query(Task).filter(Task.repository_id == repository.id).order_by(Task.created_at.desc()).all()
+    return tasks
+
 
 
 

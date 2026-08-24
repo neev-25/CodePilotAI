@@ -390,3 +390,13 @@ export async function measureArchitectureDrift(id: number, constraint: string) {
   const res = await api.post(`/repositories/${id}/architecture-drift`, { constraint: constraint });
   return res.data;
 }
+
+export async function getTasks(id: number) {
+  const res = await api.get(`/repositories/${id}/tasks`);
+  return res.data;
+}
+
+export async function createTask(id: number, title: string, description: string) {
+  const res = await api.post(`/repositories/${id}/tasks`, { title, description });
+  return res.data;
+}

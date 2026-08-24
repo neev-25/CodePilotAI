@@ -46,6 +46,7 @@ export default async function RepositoryPage({ params }: Props) {
     { title: "AI Git Diff Review", description: "Evaluate local patches for bugs/optimizations.", href: "diff-review" },
     { title: "Change Impact Analysis", description: "Evaluate blast radius for local changes.", href: "change-impact" },
     { title: "Architecture Drift", description: "Audit constrained structural decay.", href: "architecture-drift" },
+    { title: "Tasks & Collaboration", description: "Track LLM bugs onto persistent tickets.", href: "tasks" },
     { title: "PR Description", description: "Generate Pull Request description.", href: "pr" },
     { title: "Commit Message", description: "Generate Conventional Commit.", href: "commit" },
     { title: "Changelog", description: "Generate changelog entry.", href: "changelog" },
