@@ -8,6 +8,7 @@ import ReactFlow, {
   MiniMap,
   Node,
   Edge,
+  Position,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { DependencyGraph } from "@/app/lib/repository";
@@ -26,8 +27,8 @@ export default function DependencyGraphView({ graph }: Props) {
       id: n.path,
       data: { label: n.path.split("/").pop() ?? n.path },
       position: { x: 0, y: 0 },
-      sourcePosition: 'right' as any,
-      targetPosition: 'left' as any,
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
       style: {
         background: "#eff6ff",
         border: "1px solid #3b82f6",
