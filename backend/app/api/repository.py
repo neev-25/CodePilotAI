@@ -1,7 +1,8 @@
 import json
 from typing import List
 from app.schemas.response import AskResponse
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from app.worker.tasks import index_repository_task
 from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.models.user import User
@@ -316,7 +317,6 @@ def delete_repository(
 @router.post("/{repository_id}/index")
 def index_repository(
     repository_id: int,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -335,7 +335,7 @@ def index_repository(
 
     job = IndexingJob(repository_id=repository.id, status="QUEUED", message="Waiting to begin indexing.")
     db.add(job); db.commit(); db.refresh(job)
-    background_tasks.add_task(IndexingJobService.run, job.id, repository.id)
+    index_repository_task.delay(job.id, repository.id)
     return {"job_id": job.id, "status": job.status, "message": job.message}
 
 
