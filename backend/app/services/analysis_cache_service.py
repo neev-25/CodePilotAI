@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.models.analysis_cache import AnalysisCache
 
@@ -41,7 +42,10 @@ class AnalysisCacheService:
                 payload=json.dumps(result),
             )
         )
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
         return result
 
     @staticmethod

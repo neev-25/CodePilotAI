@@ -32,9 +32,9 @@ CODE:
             )
 
         prompt = f"""
-You are a senior software architect.
+You are an Academic Software Engineering Professor and Industry Expert.
 
-Analyze the repository complexity.
+Analyze the repository complexity strictly according to formal Software Engineering (SE) syllabus topics.
 
 Return ONLY valid JSON.
 
@@ -43,8 +43,18 @@ Schema:
 {{
   "overall_score":90,
   "summary":"",
+  "cyclomatic_complexity_estimate":"",
+  "coupling_assessment":"",
+  "cohesion_assessment":"",
   "maintainability":"",
   "technical_debt":"",
+  "solid_principle_violations":[
+      {{
+         "principle": "",
+         "violation": "",
+         "file": ""
+      }}
+  ],
   "complex_files":[
       {{
           "file":"",
@@ -62,14 +72,13 @@ Schema:
 
 Evaluate:
 
-1. Maintainability
-2. Complexity
-3. Long methods
-4. Large files
-5. Duplicate logic
-6. Tight coupling
-7. Technical debt
-8. Code smells
+1. Cyclomatic Complexity
+2. Algorithmic Efficiency
+3. Coupling (Loose vs Tight)
+4. Cohesion (High vs Low)
+5. SOLID Principle Adherence
+6. Code Smells & Anti-patterns
+7. Technical Debt
 
 Repository:
 

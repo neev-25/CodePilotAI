@@ -5,6 +5,7 @@ from pathlib import Path
 from git import Repo
 from git.exc import GitCommandError
 from app.core.config import settings
+from app.core.logger import logger
 
 
 BASE_DIR = settings.REPOSITORY_ROOT.resolve()
@@ -57,9 +58,33 @@ class GitService:
                 "contributors": len(contributors)
             }
         except Exception:
+            logger.warning("Could not read git statistics for %s.", local_path, exc_info=True)
             return {
                 "current_commit": None,
                 "commits": 0,
                 "branches": 0,
                 "contributors": 0
             }
+
+    @staticmethod
+    def get_recent_commits(local_path: str, days: int = 30) -> list[dict]:
+        """Fetch the commit history of the repository for the last `days` days."""
+        from datetime import datetime, timedelta
+        try:
+            repo = Repo(local_path)
+            cutoff = datetime.now() - timedelta(days=days)
+            commits_data = []
+            for commit in repo.iter_commits():
+                commit_date = datetime.fromtimestamp(commit.committed_date)
+                if commit_date < cutoff:
+                    break
+                commits_data.append({
+                    "hash": commit.hexsha[:7],
+                    "date": commit_date.strftime("%Y-%m-%d"),
+                    "message": commit.message.strip().split('\n')[0],
+                    "author": commit.author.name
+                })
+            return commits_data
+        except Exception:
+            logger.warning("Could not read recent commits for %s.", local_path, exc_info=True)
+            return []

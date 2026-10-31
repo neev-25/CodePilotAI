@@ -1,0 +1,94 @@
+name: Security Audit
+
+on:
+  schedule:
+    - cron: "0 2 * * 0"   # Every Sunday at 02:00 UTC
+  workflow_dispatch:        # Allow manual runs from the Actions tab
+
+jobs:
+  # ── Backend: pip-audit ───────────────────────────────────────────────────────
+  pip-audit:
+    name: pip-audit (backend)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: pip-
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit
+        run: |
+          pip-audit -r requirements.txt \
+            --format json \
+            --output pip-audit-report.json \
+            || true    # Don't fail; upload report regardless
+
+      - name: Upload pip-audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: backend/pip-audit-report.json
+
+      - name: Fail on HIGH/CRITICAL vulnerabilities
+        run: |
+          python - <<'EOF'
+          import json, sys
+          with open("pip-audit-report.json") as f:
+              data = json.load(f)
+          vulns = [v for dep in data.get("dependencies", []) for v in dep.get("vulns", [])]
+          if vulns:
+              print(f"Found {len(vulns)} vulnerabilit(ies):")
+              for v in vulns:
+                  print(f"  [{v.get('id')}] {v.get('description', ''[:80])}")
+              sys.exit(1)
+          print("No known vulnerabilities found.")
+          EOF
+
+  # ── Frontend: npm audit ──────────────────────────────────────────────────────
+  npm-audit:
+    name: npm audit (frontend)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies (no scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Run npm audit
+        run: |
+          npm audit --audit-level=high --json > npm-audit-report.json \
+            || true   # capture output even on non-zero exit
+
+      - name: Upload npm audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: frontend/npm-audit-report.json
+
+      - name: Fail on HIGH/CRITICAL vulnerabilities
+        run: |
+          npm audit --audit-level=high

@@ -1,7 +1,5 @@
 import api from "./api";
 
-// ── Types ──────────────────────────────────────────────────────────────────
-
 export interface Repository {
   id: number;
   name: string;
@@ -26,6 +24,13 @@ export interface RepositoryStats {
   current_commit?: string | null;
 }
 
+export interface IndexingJob {
+  id: number;
+  status: "QUEUED" | "RUNNING" | "RETRYING" | "PAUSED" | "COMPLETED" | "FAILED";
+  message: string | null;
+  result: Record<string, unknown> | null;
+}
+
 export interface FileTreeNode {
   name: string;
   type: "file" | "directory";
@@ -37,19 +42,21 @@ export interface FileTreeResponse {
   tree: FileTreeNode[];
 }
 
-export interface ReviewIssue {
-  severity: string;
-  category: string;
+export interface Source {
   file: string;
-  message: string;
+  start_line: number;
+  end_line: number;
+  snippet: string;
 }
 
-export interface RepositoryReview {
-  overall_score: number;
-  overall_review: string;
-  strengths: string[];
-  issues: ReviewIssue[];
-  recommendations: string[];
+export interface AskResponse {
+  answer: string;
+  sources: Source[];
+}
+
+export interface ProjectAssessment {
+  assessment: string;
+  sources: Source[];
 }
 
 export interface SecurityIssue {
@@ -84,26 +91,6 @@ export interface DependencyGraph {
   external_dependencies: string[];
 }
 
-export interface DependencyAnalysis {
-  overall_score: number;
-  summary: string;
-  internal_dependencies: { from: string; to: string }[];
-  external_dependencies: string[];
-  circular_dependencies: string[][];
-  highly_coupled_modules: { module: string; reason: string }[];
-  recommendations: string[];
-}
-
-export interface ComplexityAnalysis {
-  overall_score: number;
-  summary: string;
-  maintainability: string;
-  technical_debt: string;
-  complex_files: { file: string; complexity: string; reason: string }[];
-  code_smells: string[];
-  recommendations: string[];
-}
-
 export interface RepositoryHealth {
   overall_score: number;
   grade: string;
@@ -115,6 +102,23 @@ export interface RepositoryHealth {
   strengths: string[];
   weaknesses: string[];
   priority_actions: string[];
+}
+
+export interface OnboardingGuide {
+  markdown: string;
+}
+
+export interface RepositoryDiagram {
+  diagram_type: string;
+  mermaid: string;
+  sources: Source[];
+}
+
+export interface ReadinessEvidence {
+  area: string;
+  status: "present" | "missing" | "partial";
+  detail: string;
+  files: string[];
 }
 
 export interface ProductionReadiness {
@@ -130,33 +134,25 @@ export interface ProductionReadiness {
   risks: string[];
   blockers: string[];
   recommendations: string[];
+  evidence: ReadinessEvidence[];
   go_live: boolean;
 }
 
-export interface RefactorSuggestion {
-  priority: string;
-  file: string;
-  reason: string;
-  recommendation: string;
+export interface GeneratedTestCase {
+  name: string;
+  category: string;
+  purpose: string;
+  expected_result: string;
 }
 
-export interface RefactorResponse {
-  overall_score: number;
+export interface TestGeneration {
+  source_file: string;
+  test_file_path: string;
+  framework: string;
   summary: string;
-  suggestions: RefactorSuggestion[];
+  test_cases: GeneratedTestCase[];
+  test_code: string;
 }
-
-export interface AskResponse {
-  answer: string;
-  sources: {
-    file: string;
-    start_line: number;
-    end_line: number;
-    snippet: string;
-  }[];
-}
-
-// ── Repository Management ──────────────────────────────────────────────────
 
 export async function getRepositories(): Promise<Repository[]> {
   const res = await api.get("/repositories");
@@ -182,90 +178,35 @@ export async function indexRepository(id: number) {
   return res.data;
 }
 
-// ── Stats & Summary ────────────────────────────────────────────────────────
+export async function getLatestIndexJob(id: number): Promise<IndexingJob> {
+  const res = await api.get<IndexingJob>(`/repositories/${id}/index-jobs/latest`);
+  return res.data;
+}
 
 export async function getRepositoryStats(id: number): Promise<RepositoryStats> {
   const res = await api.get(`/repositories/${id}/stats`);
   return res.data;
 }
 
-export async function getRepositorySummary(id: number) {
-  const res = await api.post(`/repositories/${id}/summary`);
-  return res.data;
-}
-
-// ── Files & Code ───────────────────────────────────────────────────────────
-
-export async function getRepositoryTree(id: number): Promise<FileTreeResponse> {
-  const res = await api.get(`/repositories/${id}/files`);
-  return res.data;
-}
-
-export async function getFileContent(id: number, filePath: string) {
-  const res = await api.get(`/repositories/${id}/files/content`, {
-    params: { file_path: filePath }
-  });
-  return res.data;
-}
-
-export async function explainFile(id: number, filePath: string) {
-  const res = await api.post(`/repositories/${id}/files/explain`, {
-    path: filePath,
-  });
-  return res.data;
-}
-
-export async function explainFunction(
+export async function getProjectAssessment(
   id: number,
-  filePath: string,
-  functionName: string,
-) {
-  const res = await api.post(`/repositories/${id}/functions/explain`, {
-    path: filePath,
-    function: functionName,
-  });
+): Promise<ProjectAssessment> {
+  const res = await api.post(`/repositories/${id}/assessment`);
   return res.data;
 }
 
-export async function getDocumentation(id: number, filePath: string) {
-  const res = await api.post(`/repositories/${id}/files/document`, {
-    file_path: filePath,
-  });
+export async function getSequenceDiagram(id: number): Promise<RepositoryDiagram> {
+  const res = await api.post(`/repositories/${id}/sequence-diagram`);
   return res.data;
 }
 
-export async function generateTests(id: number, filePath: string) {
-  const res = await api.post(`/repositories/${id}/files/tests`, {
-    file_path: filePath,
-  });
+export async function getClassDiagram(id: number): Promise<RepositoryDiagram> {
+  const res = await api.post(`/repositories/${id}/class-diagram`);
   return res.data;
 }
 
-// ── Analysis ───────────────────────────────────────────────────────────────
-
-export async function getSecurityAnalysis(
-  id: number,
-): Promise<SecurityAnalysis> {
-  const res = await api.post(`/repositories/${id}/security-analysis`);
-  return res.data;
-}
-
-export async function getRepositoryReview(
-  id: number,
-): Promise<RepositoryReview> {
-  const res = await api.post(`/repositories/${id}/review`);
-  return res.data;
-}
-
-export async function getComplexityAnalysis(
-  id: number,
-): Promise<ComplexityAnalysis> {
-  const res = await api.post(`/repositories/${id}/complexity-analysis`);
-  return res.data;
-}
-
-export async function getHealthScore(id: number): Promise<RepositoryHealth> {
-  const res = await api.post(`/repositories/${id}/health-score`);
+export async function getFlowchart(id: number): Promise<RepositoryDiagram> {
+  const res = await api.post(`/repositories/${id}/flowchart`);
   return res.data;
 }
 
@@ -276,14 +217,42 @@ export async function getProductionReadiness(
   return res.data;
 }
 
-export async function getRefactorAdvice(
+export async function generateTestCases(
   id: number,
-): Promise<RefactorResponse> {
-  const res = await api.post(`/repositories/${id}/refactor`);
+  filePath: string,
+): Promise<TestGeneration> {
+  const res = await api.post(`/repositories/${id}/test-cases`, {
+    file_path: filePath,
+  });
   return res.data;
 }
 
-// ── Dependencies ───────────────────────────────────────────────────────────
+export async function getRepositoryTree(id: number): Promise<FileTreeResponse> {
+  const res = await api.get(`/repositories/${id}/files`);
+  return res.data;
+}
+
+export async function getFileContent(
+  id: number,
+  filePath: string,
+): Promise<{ path: string; content: string }> {
+  const res = await api.get(`/repositories/${id}/files/content`, {
+    params: { file_path: filePath },
+  });
+  return res.data;
+}
+
+export async function getSecurityAnalysis(
+  id: number,
+): Promise<SecurityAnalysis> {
+  const res = await api.post(`/repositories/${id}/security-analysis`);
+  return res.data;
+}
+
+export async function getHealthScore(id: number): Promise<RepositoryHealth> {
+  const res = await api.post(`/repositories/${id}/health-score`);
+  return res.data;
+}
 
 export async function getDependencyGraph(
   id: number,
@@ -291,77 +260,6 @@ export async function getDependencyGraph(
   const res = await api.get(`/repositories/${id}/dependencies`);
   return res.data;
 }
-
-export async function getDependencyAnalysis(
-  id: number,
-): Promise<DependencyAnalysis> {
-  const res = await api.post(`/repositories/${id}/dependency-analysis`);
-  return res.data;
-}
-
-// ── Documentation & README ─────────────────────────────────────────────────
-
-export async function getReadme(id: number) {
-  const res = await api.post(`/repositories/${id}/readme`);
-  return res.data;
-}
-
-export async function getArchitecture(id: number) {
-  const res = await api.post(`/repositories/${id}/architecture`);
-  return res.data;
-}
-
-// ── Diagrams ───────────────────────────────────────────────────────────────
-
-export async function getSequenceDiagram(id: number) {
-  const res = await api.post(`/repositories/${id}/sequence-diagram`);
-  return res.data;
-}
-
-export async function getClassDiagram(id: number) {
-  const res = await api.post(`/repositories/${id}/class-diagram`);
-  return res.data;
-}
-
-export async function getFlowchart(id: number) {
-  const res = await api.post(`/repositories/${id}/flowchart`);
-  return res.data;
-}
-
-// ── Dev Workflow ───────────────────────────────────────────────────────────
-
-export async function generatePRDescription(
-  id: number,
-  title: string,
-  summary = "",
-) {
-  const res = await api.post(`/repositories/${id}/pr-description`, {
-    title,
-    summary,
-  });
-  return res.data;
-}
-
-export async function generateCommitMessage(id: number, summary: string) {
-  const res = await api.post(`/repositories/${id}/commit-message`, {
-    summary,
-  });
-  return res.data;
-}
-
-export async function generateChangelog(
-  id: number,
-  version: string,
-  summary: string,
-) {
-  const res = await api.post(`/repositories/${id}/changelog`, {
-    version,
-    summary,
-  });
-  return res.data;
-}
-
-// ── Q&A ────────────────────────────────────────────────────────────────────
 
 export async function askRepository(
   id: number,
@@ -371,32 +269,7 @@ export async function askRepository(
   return res.data;
 }
 
-export async function semanticSearch(id: number, query: string) {
-  const res = await api.post(`/repositories/${id}/search`, { question: query });
-  return res.data;
-}
-
-export async function generateDiffReview(id: number, diffText: string) {
-  const res = await api.post(`/repositories/${id}/diff-review`, { diff_text: diffText });
-  return res.data;
-}
-
-export async function generateChangeImpact(id: number, filePath: string, proposedChange: string) {
-  const res = await api.post(`/repositories/${id}/change-impact`, { file_path: filePath, proposed_change: proposedChange });
-  return res.data;
-}
-
-export async function measureArchitectureDrift(id: number, constraint: string) {
-  const res = await api.post(`/repositories/${id}/architecture-drift`, { constraint: constraint });
-  return res.data;
-}
-
-export async function getTasks(id: number) {
-  const res = await api.get(`/repositories/${id}/tasks`);
-  return res.data;
-}
-
-export async function createTask(id: number, title: string, description: string) {
-  const res = await api.post(`/repositories/${id}/tasks`, { title, description });
+export async function getOnboarding(id: number): Promise<OnboardingGuide> {
+  const res = await api.post(`/repositories/${id}/onboarding`);
   return res.data;
 }

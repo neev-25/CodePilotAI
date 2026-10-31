@@ -1,79 +1,13 @@
-from app.ai.llm import GeminiClient
-from app.ai.scanner import RepositoryScanner
+from app.services.repository_diagram_service import RepositoryDiagramService
 
 
 class SequenceDiagramService:
-
     @staticmethod
-    def generate(repository):
-
-        files = RepositoryScanner.scan(
-            repository.local_path
+    def generate(repository) -> dict:
+        return RepositoryDiagramService.generate(
+            repository,
+            "sequence diagram",
+            "Find application entry points, request handling, service calls, data "
+            "access, and external API interactions. Prefer request and response flow.",
+            "sequenceDiagram",
         )
-
-        contents = []
-
-        for file in files[:25]:
-
-            try:
-
-                relative = str(
-                    file.relative_to(
-                        repository.local_path
-                    )
-                )
-
-                code = file.read_text(
-                    encoding="utf-8",
-                    errors="ignore",
-                )
-
-                contents.append(
-                    f"""
-FILE:
-{relative}
-
----------------------------------------
-
-{code[:1800]}
-"""
-                )
-
-            except Exception:
-                continue
-
-        prompt = f"""
-You are an experienced software architect.
-
-Analyze this repository.
-
-Generate ONLY a Mermaid Sequence Diagram.
-
-Return ONLY Mermaid.
-
-Rules:
-
-- Start with
-
-sequenceDiagram
-
-- Use meaningful participants.
-
-- Show request flow.
-
-- Show important modules.
-
-- Show database interactions.
-
-- Show API interactions.
-
-Do NOT explain anything.
-
-Repository:
-
-{chr(10).join(contents)}
-"""
-
-        return {
-            "mermaid": GeminiClient().generate(prompt)
-        }

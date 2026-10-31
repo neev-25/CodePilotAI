@@ -4,15 +4,22 @@ from fastapi import FastAPI, HTTPException
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
-from app.database.database import Base, engine
+from app.database.database import Base, engine, SessionLocal
 from app.api.repository import router as repository_router
 from app.api.auth import router as auth_router
 from app.ai.llm import GeminiServiceError
 from app.models.indexing_job import IndexingJob
 from app.core.config import settings
+import app.models.vector_embedding  # noqa: F401
+import app.models.embedding_rate_reservation  # noqa: F401
 
 PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/auth/login", "/auth/register", "/"}
+
+if engine.dialect.name == "postgresql":
+    with engine.begin() as connection:
+        connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
 
 Base.metadata.create_all(bind=engine)
 
@@ -62,6 +69,16 @@ async def security_and_rate_limit(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "connect-src 'self'"
+    )
+    response.headers["Permissions-Policy"] = (
+        "geolocation=(), microphone=(), camera=()"
+    )
     return response
 
 # -----------------------------
@@ -79,4 +96,20 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "environment": settings.ENVIRONMENT}
+    """Deep health check — verifies DB connectivity."""
+    db_status = "ok"
+    http_status = 200
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+    except Exception:
+        db_status = "error"
+        http_status = 503
+
+    payload = {
+        "status": "ok" if db_status == "ok" else "degraded",
+        "db": db_status,
+        "environment": settings.ENVIRONMENT,
+    }
+    return JSONResponse(content=payload, status_code=http_status)

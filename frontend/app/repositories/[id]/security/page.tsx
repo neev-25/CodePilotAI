@@ -1,7 +1,7 @@
 import { getRepository, getSecurityAnalysis } from "@/app/lib/repository";
-import RepositoryHeader from "@/app/components/repository/RepositoryHeader";
 import IssueCard from "@/app/components/repository/IssueCard";
 import StatCard from "@/app/components/repository/StatCard";
+import ReportLayout from "@/app/components/repository/ReportLayout";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -14,12 +14,13 @@ export default async function SecurityPage({ params }: Props) {
   const analysis = await getSecurityAnalysis(repoId);
 
   return (
-    <div className="max-w-6xl mx-auto p-8">
-      <RepositoryHeader
+    <ReportLayout
         repoId={repoId}
         repoName={repo.name}
         title="Security Analysis"
-      />
+        subtitle="Security, reliability, and bug findings from the repository."
+        filename={`${repo.name}-security-analysis.pdf`}
+    >
 
       <div className="mb-8">
         <StatCard label="Risk Score" value={`${analysis.risk_score}/100`} color="text-red-600" />
@@ -80,6 +81,6 @@ export default async function SecurityPage({ params }: Props) {
           ))}
         </ul>
       </div>
-    </div>
+    </ReportLayout>
   );
 }

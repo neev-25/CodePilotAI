@@ -36,3 +36,13 @@ export async function loginUser(
     });
     return data;
 }
+
+export async function changePassword(
+    currentPassword: string,
+    newPassword: string
+): Promise<void> {
+    await api.post("/auth/change-password", {
+        current_password: currentPassword,
+        new_password: newPassword,
+    });
+}

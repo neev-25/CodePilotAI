@@ -5,6 +5,7 @@ import { askRepository, AskResponse } from "@/app/lib/repository";
 import ReactMarkdown from "react-markdown";
 import { Send, Bot, User, Loader2, FileCode2 } from "lucide-react";
 import Link from "next/link";
+import PdfExportButton from "@/app/components/PdfExportButton";
 
 interface Message {
     role: "user" | "assistant";
@@ -46,7 +47,7 @@ export default function ChatInterface({ repoId }: { repoId: number }) {
                 ...prev,
                 { role: "assistant", content: res.answer, sources: res.sources },
             ]);
-        } catch (err) {
+        } catch {
             setMessages((prev) => [
                 ...prev,
                 {
@@ -68,7 +69,17 @@ export default function ChatInterface({ repoId }: { repoId: number }) {
 
     return (
         <div className="flex flex-col h-full">
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[var(--surface-50)]">
+            <div className="flex items-center justify-between border-b border-[var(--border)] bg-white px-5 py-3">
+                <div>
+                    <h2 className="text-sm font-semibold text-slate-800">Repository conversation</h2>
+                    <p className="text-xs text-slate-500">Answers include links to retrieved source evidence.</p>
+                </div>
+                <PdfExportButton
+                    targetId="chat-transcript"
+                    filename={`repository-${repoId}-conversation.pdf`}
+                />
+            </div>
+            <div id="chat-transcript" className="flex-1 overflow-y-auto p-6 space-y-6 bg-[var(--surface-50)]">
                 {messages.map((msg, idx) => (
                     <div
                         key={idx}
@@ -105,7 +116,9 @@ export default function ChatInterface({ repoId }: { repoId: number }) {
                                                 title={src.snippet}
                                             >
                                                 <FileCode2 size={14} className="text-gray-400 shrink-0" />
-                                                <span className="truncate flex-1 font-medium text-gray-700">{src.file}</span>
+                                                <span className="truncate flex-1 font-medium text-gray-700">
+                                                    {src.file}:{src.start_line}-{src.end_line}
+                                                </span>
                                             </Link>
                                         ))}
                                     </div>

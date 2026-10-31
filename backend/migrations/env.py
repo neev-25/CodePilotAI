@@ -17,8 +17,8 @@ import app.models.user  # noqa: F401
 import app.models.repository  # noqa: F401
 import app.models.indexing_job  # noqa: F401
 import app.models.analysis_cache  # noqa: F401
-import app.models.task  # noqa: F401
-import app.models.ai_usage_log  # noqa: F401
+import app.models.vector_embedding  # noqa: F401
+import app.models.embedding_rate_reservation  # noqa: F401
 
 target_metadata = Base.metadata
 

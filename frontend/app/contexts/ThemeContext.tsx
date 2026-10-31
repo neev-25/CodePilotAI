@@ -1,49 +1,84 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import {
+    createContext,
+    useContext,
+    useEffect,
+    useSyncExternalStore,
+    type ReactNode,
+} from "react";
 
 type Theme = "light" | "dark";
+const THEME_CHANGE_EVENT = "codepilot-theme-change";
 
 interface ThemeContextValue {
     theme: Theme;
     toggleTheme: () => void;
+    setTheme: (theme: Theme) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
     theme: "light",
     toggleTheme: () => { },
+    setTheme: () => { },
 });
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-    const [theme, setTheme] = useState<Theme>("light");
+function getThemeSnapshot(): Theme {
+    const stored = localStorage.getItem("codepilot-theme");
+    if (stored === "dark" || stored === "light") {
+        return stored;
+    }
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
-    // On mount: read persisted preference or system preference
-    useEffect(() => {
-        const stored = localStorage.getItem("codepilot-theme") as Theme | null;
-        if (stored === "dark" || stored === "light") {
-            applyTheme(stored);
-            setTheme(stored);
-        } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-            applyTheme("dark");
-            setTheme("dark");
+function getServerThemeSnapshot(): Theme {
+    return "light";
+}
+
+function subscribeToThemeChanges(callback: () => void) {
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const onSystemThemeChange = () => {
+        if (!localStorage.getItem("codepilot-theme")) {
+            callback();
         }
-    }, []);
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, callback);
+    window.addEventListener("storage", callback);
+    mediaQuery.addEventListener("change", onSystemThemeChange);
+    return () => {
+        window.removeEventListener(THEME_CHANGE_EVENT, callback);
+        window.removeEventListener("storage", callback);
+        mediaQuery.removeEventListener("change", onSystemThemeChange);
+    };
+}
 
-    function applyTheme(t: Theme) {
-        document.documentElement.classList.toggle("dark", t === "dark");
+function applyTheme(theme: Theme) {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+    const theme = useSyncExternalStore(
+        subscribeToThemeChanges,
+        getThemeSnapshot,
+        getServerThemeSnapshot,
+    );
+
+    useEffect(() => {
+        applyTheme(theme);
+    }, [theme]);
+
+    function selectTheme(next: Theme) {
+        applyTheme(next);
+        localStorage.setItem("codepilot-theme", next);
+        window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
     }
 
     function toggleTheme() {
-        setTheme((prev) => {
-            const next: Theme = prev === "light" ? "dark" : "light";
-            applyTheme(next);
-            localStorage.setItem("codepilot-theme", next);
-            return next;
-        });
+        selectTheme(theme === "light" ? "dark" : "light");
     }
 
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme }}>
+        <ThemeContext.Provider value={{ theme, toggleTheme, setTheme: selectTheme }}>
             {children}
         </ThemeContext.Provider>
     );

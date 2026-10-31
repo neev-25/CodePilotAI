@@ -4,33 +4,116 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  frontend:
+  # ── Backend ──────────────────────────────────────────────────────────────────
+  backend-ci:
+    name: Backend (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Cache pip wheels — keyed on requirements.txt hash
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Syntax / import check
+        run: python -m compileall -q app
+
+      - name: Run pytest with coverage
+        env:
+          # Safe dummy values so app config doesn't raise at import time
+          GEMINI_API_KEY: "ci-dummy"
+          DATABASE_URL: "sqlite:///./test.db"
+        run: |
+          python -m pytest tests/ \
+            --tb=short \
+            --cov=app \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing \
+            -q
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+
+  # ── Frontend ─────────────────────────────────────────────────────────────────
+  frontend-ci:
+    name: Frontend (Node)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-      - run: npx tsc --noEmit
-      - run: npm run build
-  backend:
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+  # ── Docker build verification ─────────────────────────────────────────────────
+  docker-build:
+    name: Docker Build Check
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
+    needs: [backend-ci, frontend-ci]   # only worth building if tests pass
+
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image (no push)
+        uses: docker/build-push-action@v6
         with:
-          python-version: "3.12"
-      - run: pip install -r requirements.txt
-      - run: python -m compileall -q app
-      - run: pytest -q tests
+          context: ./backend
+          push: false
+          tags: codepilotai-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          tags: codepilotai-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=http://localhost:8000

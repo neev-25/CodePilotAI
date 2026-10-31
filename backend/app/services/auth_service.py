@@ -5,10 +5,16 @@ import bcrypt
 from sqlalchemy.orm import Session
 
 from app.models.user import User
+from app.core.config import settings
 
-SECRET_KEY = "codepilot-ai-super-secret-key-change-in-production-2024"
-ALGORITHM = "HS256"
+# Algorithm is fixed; the actual secret comes from settings (env-driven).
+_ALGORITHM = "HS256"
+_DEV_FALLBACK_KEY = "codepilot-dev-secret-key-change-in-production"
 ACCESS_TOKEN_EXPIRE_HOURS = 168  # 7 days
+
+
+def _jwt_secret() -> str:
+    return settings.SECRET_KEY or _DEV_FALLBACK_KEY
 
 
 def hash_password(password: str) -> str:
@@ -33,12 +39,12 @@ def create_access_token(data: dict) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, _jwt_secret(), algorithm=_ALGORITHM)
 
 
 def decode_token(token: str) -> Optional[dict]:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, _jwt_secret(), algorithms=[_ALGORITHM])
         return payload
     except JWTError:
         return None
@@ -67,3 +73,17 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
     if not verify_password(password, user.hashed_password):
         return None
     return user
+
+
+def change_password(
+    db: Session,
+    user: User,
+    current_password: str,
+    new_password: str,
+) -> bool:
+    if not verify_password(current_password, user.hashed_password):
+        return False
+    user.hashed_password = hash_password(new_password)
+    db.commit()
+    db.refresh(user)
+    return True

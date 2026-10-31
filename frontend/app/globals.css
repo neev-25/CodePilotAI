@@ -35,6 +35,7 @@ html.dark {
 
   --background: var(--bg);
   --foreground: var(--fg);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -143,6 +144,47 @@ html.dark .auth-card {
 }
 
 .input-base::placeholder {
+  color: var(--fg-subtle);
+}
+
+/* Normalize Tailwind's hard-coded light surfaces used across older screens. */
+html.dark .app-surface :is(.bg-white, .bg-slate-50, .bg-slate-100, .bg-gray-50, .bg-gray-100) {
+  background-color: var(--bg-panel) !important;
+}
+
+html.dark .app-surface :is(.text-slate-900, .text-slate-800, .text-slate-700, .text-gray-900, .text-gray-800, .text-gray-700) {
+  color: var(--fg) !important;
+}
+
+html.dark .app-surface :is(.text-slate-600, .text-slate-500, .text-gray-600, .text-gray-500) {
+  color: var(--fg-muted) !important;
+}
+
+html.dark .app-surface :is(.border-slate-100, .border-slate-200, .border-slate-300, .border-gray-100, .border-gray-200) {
+  border-color: var(--border) !important;
+}
+
+html.dark .app-surface :is(.bg-indigo-50, .bg-indigo-100) {
+  background-color: rgba(99, 102, 241, 0.16) !important;
+}
+
+html.dark .app-surface :is(.text-indigo-600, .text-indigo-700) {
+  color: #a5b4fc !important;
+}
+
+html.dark .app-surface .dashboard-primary-cta {
+  background-color: #fff !important;
+  color: #0f172a !important;
+}
+
+html.dark .app-surface :is(input, textarea, select) {
+  border-color: var(--border);
+  background-color: #111827;
+  color: var(--fg);
+  color-scheme: dark;
+}
+
+html.dark .app-surface :is(input, textarea, select)::placeholder {
   color: var(--fg-subtle);
 }
 

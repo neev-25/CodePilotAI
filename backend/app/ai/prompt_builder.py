@@ -1,3 +1,6 @@
+from langchain_core.prompts import PromptTemplate
+
+
 class PromptBuilder:
 
     @staticmethod
@@ -21,7 +24,7 @@ Lines: {metadata['start']} - {metadata['end']}
 
         context = "\n\n".join(context_parts)
 
-        prompt = f"""
+        prompt = PromptTemplate.from_template("""
 You are CodePilot AI.
 
 You answer questions ONLY using the provided repository context.
@@ -44,6 +47,5 @@ Repository Context
 Question
 
 {question}
-"""
-
-        return prompt
+""")
+        return prompt.format(context=context, question=question)

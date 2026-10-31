@@ -4,8 +4,8 @@ import RepositoryActionLauncher from "../components/repository/RepositoryActionL
 export default function SearchGlobalPage() {
   return (
     <MainLayout>
-      <RepositoryActionLauncher title="Semantic Search" description="Ask natural-language questions about an indexed codebase." actions={[
-        { label: "Open code search", href: "/repositories/:id/search", description: "Search the repository with RAG-powered answers and source citations." },
+      <RepositoryActionLauncher title="Codebase Q&A" description="Ask natural-language questions and get answers grounded in indexed source code." actions={[
+        { label: "Open repository chat", href: "/repositories/:id/chat", description: "Get RAG-powered answers with file and line citations." },
       ]} />
     </MainLayout>
   );

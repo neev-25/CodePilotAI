@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 
+from app.models.analysis_cache import AnalysisCache
 from app.models.repository import Repository
+from app.models.vector_embedding import VectorEmbedding
 
 
 class RepositoryRepository:
@@ -34,5 +36,11 @@ class RepositoryRepository:
 
     @staticmethod
     def delete(db: Session, repository):
+        db.query(AnalysisCache).filter(
+            AnalysisCache.repository_id == repository.id
+        ).delete(synchronize_session=False)
+        db.query(VectorEmbedding).filter(
+            VectorEmbedding.repository_id == repository.id
+        ).delete(synchronize_session=False)
         db.delete(repository)
         db.commit()

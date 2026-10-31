@@ -4,11 +4,11 @@ import RepositoryActionLauncher from "../components/repository/RepositoryActionL
 export default function AnalysisPage() {
   return (
     <MainLayout>
-      <RepositoryActionLauncher title="Analysis" description="Run maintainability, dependency, and health checks on any indexed repository." actions={[
-        { label: "Complexity analysis", href: "/repositories/:id/complexity", description: "Find complex files, code smells, and technical debt." },
-        { label: "Dependency analysis", href: "/repositories/:id/dependency-analysis", description: "Inspect coupling, circular imports, and recommendations." },
-        { label: "Health score", href: "/repositories/:id/health", description: "Get a consolidated codebase health report." },
-        { label: "Production readiness", href: "/repositories/:id/production", description: "Assess deployment and operational readiness." },
+      <RepositoryActionLauncher title="Project Analysis" description="Understand user value and engineering quality with evidence from an indexed repository." actions={[
+        { label: "Project assessment", href: "/repositories/:id/assessment", description: "Review product/user value and software-engineering characteristics with citations." },
+        { label: "Engineering health", href: "/repositories/:id/health", description: "See maintainability, security, architecture, and complexity scores with prioritized actions." },
+        { label: "Security analysis", href: "/repositories/:id/security", description: "Inspect security, reliability, and bug findings." },
+        { label: "Developer onboarding", href: "/repositories/:id/onboarding", description: "Generate an evidence-based guide for understanding the codebase." },
       ]} />
     </MainLayout>
   );

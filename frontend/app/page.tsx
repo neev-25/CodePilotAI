@@ -1,20 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Bot, FileSearch, GitBranch, ShieldCheck, Sparkles, Moon, Sun } from "lucide-react";
-import { useTheme } from "@/app/contexts/ThemeContext";
+import { ArrowRight, Bot, FileSearch, GitBranch, Search, Sparkles } from "lucide-react";
 
 const workflows = [
-  { title: "Repository intelligence", description: "Explore code, dependencies, docs, and diagrams in one workspace.", href: "/repositories", icon: GitBranch },
-  { title: "Quality & health", description: "Surface complexity, technical debt, and actions that matter first.", href: "/analysis", icon: FileSearch },
-  { title: "Security posture", description: "Review risks and reliability concerns before they reach production.", href: "/security", icon: ShieldCheck },
+  { title: "Project assessment", description: "Understand product value and software quality with source-grounded findings.", href: "/analysis", icon: FileSearch },
+  { title: "Codebase Q&A", description: "Ask about a repository and inspect the cited code behind each answer.", href: "/search", icon: Search },
+  { title: "Repository workspace", description: "Connect, index, and explore repository structure and dependencies.", href: "/repositories", icon: GitBranch },
 ];
 
 export default function HomePage() {
-  const { theme, toggleTheme } = useTheme();
-
   return (
-    <div className="mx-auto max-w-7xl space-y-7">
+    <div className="mx-auto max-w-7xl space-y-7 pt-3 sm:pt-4">
       {/* Hero */}
       <section className="relative overflow-hidden rounded-3xl bg-[#101827] px-6 py-10 text-white shadow-xl shadow-slate-300/40 sm:px-10 sm:py-14">
         <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full bg-indigo-500/30 blur-3xl" />
@@ -27,14 +24,14 @@ export default function HomePage() {
             Ship with a clearer view of your codebase.
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-            CodePilot turns a repository into fast, reusable engineering context—from architecture to security and the next best improvement.
+            CodePilot explains what a project does for its users, how it is engineered, and where the evidence lives in the code.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/repositories" className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-900 shadow-lg transition hover:bg-indigo-50">
+            <Link href="/repositories" className="dashboard-primary-cta inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-900 shadow-lg transition hover:bg-indigo-50">
               Connect a repository <ArrowRight size={17} />
             </Link>
             <Link href="/analysis" className="rounded-xl border border-white/20 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">
-              Explore analysis
+              Assess a project
             </Link>
           </div>
         </div>
@@ -43,9 +40,9 @@ export default function HomePage() {
       {/* Stats */}
       <section className="grid gap-4 sm:grid-cols-3">
         {[
-          ["AI tools", "19", "Focused workflows"],
-          ["Coverage", "End-to-end", "From clone to ship"],
-          ["Saved context", "Reusable", "Across your team"],
+          ["Core workflows", "12", "Focused project insights"],
+          ["Evidence", "Cited", "Answers linked to source"],
+          ["Stack", "LangChain + RAG", "Gemini and Chroma"],
         ].map(([label, value, detail]) => (
           <div key={label} className="panel rounded-2xl p-5">
             <p className="eyebrow">{label}</p>

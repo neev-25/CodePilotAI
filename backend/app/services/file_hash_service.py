@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from app.core.config import settings
+from app.core.logger import logger
 
 
 class FileHashService:
@@ -14,8 +15,8 @@ class FileHashService:
 
     @staticmethod
     def _ledger_path(repository_id: int) -> Path:
-        settings.VECTOR_STORE_PATH.mkdir(parents=True, exist_ok=True)
-        return settings.VECTOR_STORE_PATH / f"{repository_id}_hashes.json"
+        settings.INDEX_STATE_PATH.mkdir(parents=True, exist_ok=True)
+        return settings.INDEX_STATE_PATH / f"{repository_id}_hashes.json"
 
     @staticmethod
     def load(repository_id: int) -> Dict[str, str]:
@@ -25,7 +26,12 @@ class FileHashService:
             return {}
         try:
             return json.loads(ledger.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            logger.warning(
+                "Could not read the file hash ledger for repository %s: %s",
+                repository_id,
+                error,
+            )
             return {}
 
     @staticmethod
@@ -51,7 +57,7 @@ class FileHashService:
             changed   - documents needing re-embedding
             new_hashes - complete updated ledger (unchanged paths kept as-is)
         """
-        new_hashes: Dict[str, str] = dict(stored)  # carry over unchanged
+        new_hashes: Dict[str, str] = {}
         changed: List[Dict] = []
 
         for doc in documents:

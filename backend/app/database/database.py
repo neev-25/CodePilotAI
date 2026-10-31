@@ -33,11 +33,16 @@ DATABASE_URL = settings.DATABASE_URL
 
 # SQLite requires check_same_thread=False; PostgreSQL does not support it.
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+_pool_options = (
+    {}
+    if DATABASE_URL.startswith("sqlite")
+    else {"pool_pre_ping": True, "pool_recycle": 300, "pool_timeout": 30}
+)
 
 engine = create_engine(
     DATABASE_URL,
     connect_args=_connect_args,
-    pool_pre_ping=True,  # detect stale connections before use
+    **_pool_options,
 )
 
 SessionLocal = sessionmaker(

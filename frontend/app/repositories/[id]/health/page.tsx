@@ -1,6 +1,6 @@
 import { getRepository, getHealthScore } from "@/app/lib/repository";
-import RepositoryHeader from "@/app/components/repository/RepositoryHeader";
 import MarkdownViewer from "@/app/components/repository/MarkdownViewer";
+import ReportLayout from "@/app/components/repository/ReportLayout";
 import StatCard from "@/app/components/repository/StatCard";
 
 type Props = {
@@ -14,12 +14,13 @@ export default async function HealthPage({ params }: Props) {
   const data = await getHealthScore(repoId);
 
   return (
-    <div className="max-w-6xl mx-auto p-8">
-      <RepositoryHeader
+    <ReportLayout
         repoId={repoId}
         repoName={repo.name}
         title="Repository Health Score"
-      />
+        subtitle="A structured overview of maintainability, security, architecture, and complexity."
+        filename={`${repo.name}-engineering-health.pdf`}
+    >
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
         <StatCard label="Overall Score" value={`${data.overall_score}/100`} color="text-blue-600" />
@@ -59,6 +60,6 @@ export default async function HealthPage({ params }: Props) {
           ))}
         </ul>
       </div>
-    </div>
+    </ReportLayout>
   );
 }

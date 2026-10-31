@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Bell, Menu, Moon, Search, Sun, LogOut, User } from "lucide-react";
+import { Bell, Menu, Moon, Search, Sun, LogOut } from "lucide-react";
 import { navigation } from "./navigation";
 import { useTheme } from "@/app/contexts/ThemeContext";
 import { useAuth } from "@/app/contexts/AuthContext";
@@ -125,14 +125,7 @@ export default function Header({ onOpenMenu }: { onOpenMenu: () => void }) {
               <p className="text-xs truncate" style={{ color: "var(--fg-muted)" }}>{user?.email}</p>
             </div>
             <div style={{ borderTop: "1px solid var(--border)", margin: "4px 0" }} />
-            <Link
-              href="/settings"
-              onClick={() => setUserMenuOpen(false)}
-              className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-indigo-50 dark:hover:bg-white/5"
-              style={{ color: "var(--fg)" }}
-            >
-              <User size={15} /> Settings
-            </Link>
+
             <button
               onClick={handleLogout}
               className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-red-50"

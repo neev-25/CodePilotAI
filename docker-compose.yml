@@ -6,13 +6,13 @@ networks:
 
 volumes:
   postgres_data:
-  chroma_data:
+  index_state:
   repo_data:
 
 services:
   # ── PostgreSQL ──────────────────────────────────────────────────────────────
   db:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_DB: codepilot
@@ -52,12 +52,20 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg2://codepilot:${POSTGRES_PASSWORD:-codepilot_dev}@db:5432/codepilot
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://codepilot:${POSTGRES_PASSWORD:-codepilot_dev}@db:5432/codepilot}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-5}
+      EMBEDDING_TOKENS_PER_MINUTE: ${EMBEDDING_TOKENS_PER_MINUTE:-20000}
+      EMBEDDING_MAX_RETRIES: ${EMBEDDING_MAX_RETRIES:-5}
+      EMBEDDING_INITIAL_BACKOFF: ${EMBEDDING_INITIAL_BACKOFF:-2}
+      EMBEDDING_MAX_BACKOFF: ${EMBEDDING_MAX_BACKOFF:-90}
+      EMBEDDING_BATCH_DELAY: ${EMBEDDING_BATCH_DELAY:-1}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
       ENVIRONMENT: production
     volumes:
-      - chroma_data:/app/chroma_db
+      - index_state:/app/index_state
       - repo_data:/app/repositories
     ports:
       - "8000:8000"
@@ -77,10 +85,18 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg2://codepilot:${POSTGRES_PASSWORD:-codepilot_dev}@db:5432/codepilot
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://codepilot:${POSTGRES_PASSWORD:-codepilot_dev}@db:5432/codepilot}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-5}
+      EMBEDDING_TOKENS_PER_MINUTE: ${EMBEDDING_TOKENS_PER_MINUTE:-20000}
+      EMBEDDING_MAX_RETRIES: ${EMBEDDING_MAX_RETRIES:-5}
+      EMBEDDING_INITIAL_BACKOFF: ${EMBEDDING_INITIAL_BACKOFF:-2}
+      EMBEDDING_MAX_BACKOFF: ${EMBEDDING_MAX_BACKOFF:-90}
+      EMBEDDING_BATCH_DELAY: ${EMBEDDING_BATCH_DELAY:-1}
     volumes:
-      - chroma_data:/app/chroma_db
+      - index_state:/app/index_state
       - repo_data:/app/repositories
     networks:
       - codepilot
@@ -91,12 +107,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://backend:8000
+        NEXT_PUBLIC_API_BASE_URL: http://backend:8000
     restart: unless-stopped
     depends_on:
       - backend
     environment:
-      NEXT_PUBLIC_API_URL: http://backend:8000
+      NEXT_PUBLIC_API_BASE_URL: http://backend:8000
     ports:
       - "3000:3000"
     networks:

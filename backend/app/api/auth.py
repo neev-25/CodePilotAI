@@ -1,17 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database.database import SessionLocal
-from app.schemas.user import UserRegister, UserLogin, UserResponse, TokenResponse
+from app.schemas.user import (
+    ChangePasswordRequest,
+    UserRegister,
+    UserLogin,
+    UserResponse,
+    TokenResponse,
+)
 from app.services.auth_service import (
     authenticate_user,
+    change_password,
     create_user,
     create_access_token,
     decode_token,
     get_user_by_email,
 )
 from app.models.user import User
+from app.core.logger import logger
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -21,8 +30,17 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        try:
+            db.rollback()
+        except SQLAlchemyError:
+            logger.warning("Could not roll back a failed authentication request.", exc_info=True)
+        raise
     finally:
-        db.close()
+        try:
+            db.close()
+        except SQLAlchemyError:
+            logger.warning("Could not cleanly close an authentication session.", exc_info=True)
 
 
 def get_current_user(
@@ -83,3 +101,22 @@ def login(body: UserLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
+def update_password(
+    body: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not change_password(
+        db,
+        current_user,
+        body.current_password,
+        body.new_password,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect.",
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

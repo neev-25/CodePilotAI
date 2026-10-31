@@ -1,46 +1,39 @@
-from typing import List
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
 class CodeChunker:
 
-    CHUNK_SIZE = 120
-    OVERLAP = 20
+    CHUNK_SIZE = 1200
+    OVERLAP = 200
 
     @staticmethod
     def chunk(document: dict):
-
         path = document["path"]
         content = document["content"]
-
-        lines = content.splitlines()
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=CodeChunker.CHUNK_SIZE,
+            chunk_overlap=CodeChunker.OVERLAP,
+            add_start_index=True,
+            strip_whitespace=False,
+            separators=["\n\n", "\n", " ", ""],
+        )
 
         chunks = []
-
-        start = 0
-
-        while start < len(lines):
-
-            end = min(
-                start + CodeChunker.CHUNK_SIZE,
-                len(lines),
-            )
-
-            chunk = "\n".join(lines[start:end])
-
+        for split_document in splitter.create_documents(
+            [content],
+            metadatas=[{"path": path}],
+        ):
+            start_index = split_document.metadata["start_index"]
+            start_line = content.count("\n", 0, start_index) + 1
+            last_char_index = start_index + max(len(split_document.page_content) - 1, 0)
             chunks.append(
                 {
                     "path": path,
-                    "start_line": start + 1,
-                    "end_line": end,
-                    "content": chunk,
+                    "start_line": start_line,
+                    "end_line": content.count("\n", 0, last_char_index) + 1,
+                    "content": split_document.page_content,
                 }
             )
-
-            start += (
-                CodeChunker.CHUNK_SIZE
-                - CodeChunker.OVERLAP
-            )
-
         return chunks
 
     @staticmethod

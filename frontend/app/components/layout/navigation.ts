@@ -3,10 +3,6 @@ import {
     FolderGit2,
     BarChart3,
     Search,
-    ShieldCheck,
-    FileCode2,
-    GitPullRequest,
-    TestTube2,
     Network,
     Settings,
     User,
@@ -27,39 +23,15 @@ export const navigation = [
     },
 
     {
-        title: "Analysis",
+        title: "Project Analysis",
         href: "/analysis",
         icon: BarChart3,
     },
 
     {
-        title: "Security",
-        href: "/security",
-        icon: ShieldCheck,
-    },
-
-    {
-        title: "Search",
+        title: "Code Q&A",
         href: "/search",
         icon: Search,
-    },
-
-    {
-        title: "Documentation",
-        href: "/documentation",
-        icon: FileCode2,
-    },
-
-    {
-        title: "Pull Requests",
-        href: "/pull-request",
-        icon: GitPullRequest,
-    },
-
-    {
-        title: "Testing",
-        href: "/testing",
-        icon: TestTube2,
     },
 
     {

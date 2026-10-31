@@ -1,9 +1,7 @@
 import {
   getRepository,
   getRepositoryStats,
-  getRepositorySummary,
 } from "@/app/lib/repository";
-import ReactMarkdown from "react-markdown";
 import RepositoryActionCard from "@/app/components/repository/actions/RepositoryActionCard";
 import StatCard from "@/app/components/repository/StatCard";
 import IndexRepositoryButton from "@/app/components/repository/IndexRepositoryButton";
@@ -19,100 +17,77 @@ export default async function RepositoryPage({ params }: Props) {
   const repo = await getRepository(repoId);
   const stats = await getRepositoryStats(repoId);
 
-  let summary: { summary: string } | null = null;
-  try {
-    summary = await getRepositorySummary(repoId);
-  } catch {
-    summary = null;
-  }
-
   const actions = [
-    { title: "AI Chat", description: "Query RAG indices about this repository.", href: "chat" },
-    { title: "File Explorer", description: "Browse and analyze repository files.", href: "files" },
-    { title: "Security Analysis", description: "Find vulnerabilities and security issues.", href: "security" },
-    { title: "Repository Review", description: "AI code review of the repository.", href: "review" },
-    { title: "README Generator", description: "Generate professional README.", href: "readme" },
-    { title: "Architecture", description: "Explain repository architecture.", href: "architecture" },
-    { title: "Dependency Graph", description: "Visualize file dependencies.", href: "dependency-graph" },
-    { title: "Dependency Analysis", description: "Analyze coupling and circular deps.", href: "dependency-analysis" },
-    { title: "Sequence Diagram", description: "Generate sequence diagram.", href: "sequence" },
-    { title: "Class Diagram", description: "Generate class diagram.", href: "class-diagram" },
-    { title: "Flowchart", description: "Generate flowchart.", href: "flowchart" },
-    { title: "Complexity Analysis", description: "Analyze code complexity.", href: "complexity" },
-    { title: "Health Score", description: "Overall repository health.", href: "health" },
-    { title: "Production Readiness", description: "Production readiness report.", href: "production" },
-    { title: "Refactoring Advisor", description: "Suggest improvements.", href: "refactor" },
-    { title: "Test Generator", description: "Generate unit tests.", href: "tests" },
-    { title: "AI Git Diff Review", description: "Evaluate local patches for bugs/optimizations.", href: "diff-review" },
-    { title: "Change Impact Analysis", description: "Evaluate blast radius for local changes.", href: "change-impact" },
-    { title: "Architecture Drift", description: "Audit constrained structural decay.", href: "architecture-drift" },
-    { title: "Tasks & Collaboration", description: "Track LLM bugs onto persistent tickets.", href: "tasks" },
-    { title: "PR Description", description: "Generate Pull Request description.", href: "pr" },
-    { title: "Commit Message", description: "Generate Conventional Commit.", href: "commit" },
-    { title: "Changelog", description: "Generate changelog entry.", href: "changelog" },
-    { title: "Semantic Search", description: "Ask questions about the code.", href: "search" },
+    { title: "Project Assessment", description: "Evaluate user value and engineering quality with source citations.", href: "assessment" },
+    { title: "Codebase Q&A", description: "Ask questions and inspect retrieved source evidence.", href: "chat" },
+    { title: "Engineering Health", description: "Prioritized maintainability, security, and architecture signals.", href: "health" },
+    { title: "Security Analysis", description: "Review security, reliability, and bug findings.", href: "security" },
+    { title: "Production Readiness", description: "Review release risks and verifiable operational evidence.", href: "production-readiness" },
+    { title: "Dependency Map", description: "Explore modules and their relationships.", href: "dependency-graph" },
+    { title: "Developer Onboarding", description: "Build a practical guide to the repository.", href: "onboarding" },
+    { title: "Test Case Generator", description: "Generate framework-aware tests from a selected source file.", href: "test-generator" },
+    { title: "Sequence Diagram", description: "Visualize evidenced request and service interactions.", href: "sequence" },
+    { title: "Class Diagram", description: "Visualize classes, models, and their relationships.", href: "class-diagram" },
+    { title: "Application Flowchart", description: "Trace the main flow through the codebase.", href: "flowchart" },
+    { title: "Browse Source", description: "Inspect indexed files and cited code.", href: "files" },
   ];
 
   return (
-    <div className="mx-auto max-w-6xl">
-      <h1 className="text-4xl font-bold">{repo.name}</h1>
-      <p className="text-gray-500 mt-2">{repo.github_url}</p>
+    <div className="mx-auto max-w-6xl font-sans text-slate-800">
+      <div className="border-b pb-6 mb-8">
+        <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">{repo.name}</h1>
+        <p className="text-slate-500 mt-2 font-mono text-sm">{repo.github_url}</p>
 
-      <div className="mt-4">
-        <span
-          className={`px-3 py-1 rounded text-sm font-medium ${repo.status === "INDEXED"
-            ? "bg-green-100 text-green-800"
-            : repo.status === "FAILED"
-              ? "bg-red-100 text-red-800"
-              : "bg-blue-100 text-blue-800"
-            }`}
-        >
-          {repo.status}
-        </span>
+        <div className="mt-5">
+          <span
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide uppercase ${repo.status === "INDEXED"
+              ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+              : repo.status === "FAILED"
+                ? "bg-red-100 text-red-800 border border-red-200"
+                : "bg-blue-100 text-blue-800 border border-blue-200"
+              }`}
+          >
+            {repo.status}
+          </span>
+        </div>
       </div>
+
       <IndexRepositoryButton repositoryId={repo.id} status={repo.status} />
 
-      <div className="mt-8">
-        <h2 className="text-2xl font-bold">Repository Statistics</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+      <div className="mt-12">
+        <h2 className="text-xl font-semibold border-b pb-2 mb-6">Repository Statistics</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           <StatCard label="Total Files" value={stats.files} />
           <StatCard label="Lines of Code" value={stats.loc ?? 0} />
           <StatCard label="Commits" value={stats.commits ?? 0} />
-          <StatCard label="Branches" value={stats.branches ?? 0} />
           <StatCard label="Contributors" value={stats.contributors ?? 0} />
-          <StatCard label="Indexed Documents" value={stats.documents ?? 0} />
-          <StatCard label="Chunks" value={stats.chunks ?? 0} />
-          <StatCard label="Vectors" value={stats.vectors ?? 0} />
         </div>
       </div>
 
-      <div className="mt-8">
-        <h2 className="text-xl font-bold mb-4">Languages</h2>
-        <div className="space-y-2">
-          {Object.entries(stats.languages).map(([name, count]) => (
-            <div
-              key={name}
-              className="flex justify-between border rounded-lg p-3 bg-white"
-            >
-              <span>{name}</span>
-              <span className="text-gray-500">{count} files</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {summary && (
-        <div className="mt-10">
-          <h2 className="text-2xl font-bold mb-5">Repository Summary</h2>
-          <div className="border rounded-xl bg-white p-6 shadow-sm prose prose-gray max-w-none">
-            <ReactMarkdown>{summary.summary}</ReactMarkdown>
+      <div className="grid md:grid-cols-2 gap-8 mt-12">
+        <div>
+          <h2 className="text-xl font-semibold border-b pb-2 mb-6">Tech Stack Breakdown</h2>
+          <div className="space-y-3">
+            {Object.entries(stats.languages).map(([name, count]) => (
+              <div
+                key={name}
+                className="flex justify-between border-b pb-2 text-sm"
+              >
+                <span className="font-medium text-slate-700">{name}</span>
+                <span className="text-slate-500">{count} files</span>
+              </div>
+            ))}
           </div>
         </div>
-      )}
 
-      <div className="mt-12">
-        <h2 className="text-2xl font-bold mb-6">AI Tools</h2>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+      </div>
+
+      <div className="mt-16 bg-slate-50 p-8 rounded-xl border border-slate-200">
+        <h2 className="text-2xl font-bold mb-2 text-slate-800">Project Insights</h2>
+        <p className="mb-8 text-sm text-slate-600">
+          Start with a cited product and engineering assessment, then explore focused tools.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {actions.map((action) => (
             <RepositoryActionCard
               key={action.href}
