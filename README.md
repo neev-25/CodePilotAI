@@ -1,6 +1,6 @@
-d
-
 # CodePilot AI 🚀
+
+**Live demo:** [codepilotai-frontend.onrender.com](https://codepilotai-frontend.onrender.com)
 
 > **Evidence-grounded repository analysis for developers and teams**
 > Understand a project's user value and engineering health, ask source-cited questions, and explore repository structure with a focused LangChain RAG workflow.
